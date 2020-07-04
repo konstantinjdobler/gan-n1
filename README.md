@@ -10,6 +10,8 @@ https://github.com/lucidrains/stylegan2-pytorch "the simplest implemenation of s
 
 https://github.com/rosinality/stylegan2-pytorch
 
+https://github.com/HighCWu/Condition-StyleGAN-PyTorch
+
 # Interesting links
 
 https://www.youtube.com/watch?v=dCKbRCUyop8 Video about StyleGAN concepts with impressive presentation style
