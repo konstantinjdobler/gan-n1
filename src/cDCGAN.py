@@ -132,8 +132,8 @@ class Trainer:
                 g_loss.backward()
                 self.optimizer_g.step()
                 if i % 50 == 0:
-                    print(f"epoch{epoch} pictures saved")
-                    vutils.save_image(fake.data, '{}/result_epoch_{:03d}.png'.format(config.result_dir, epoch), normalize=True)
+                    print(f"[{i}/{len(dataloader)}] batches | epoch{epoch} batch{i} pictures saved")
+                    vutils.save_image(fake.data, '{}/result_epoch_{:03d}_batch_{:03d}.png'.format(config.result_dir, epoch, i), normalize=True)
             print("epoch{:03d} d_real: {}, d_fake: {}".format(
                 epoch, d_real.mean(), d_fake.mean()))
             vutils.save_image(
