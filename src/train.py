@@ -24,7 +24,7 @@ parser.add_argument('--checkpoint-dir', type=str, default='./checkpoints')
 parser.add_argument('--checkpoint-prefix', type=str, default='')
 parser.add_argument('-s', '--save-checkpoints', dest='save_checkpoints', action='store_true')
 parser.add_argument('--nrs', '--no-random-sample', dest='random_sample', action='store_false', help='save random samples of fake faces during training')
-parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=500,
+parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=1500,
                     help='controls how often during an epoch smaple images are saved or info is printed')
 parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
 parser.add_argument('--batch-size', type=int, default=32)
@@ -118,7 +118,7 @@ class Trainer:
 
                 if i % config.training_info_interval == 0:
                     if config.print_loss:
-                        tqdm.write(f"generator loss: {g_loss} | discriminator loss: {d_loss}")
+                        tqdm.write(f"epoch {epoch+1} batch {i} | generator loss: {g_loss} | discriminator loss: {d_loss}")
                     if config.random_sample:
                         vutils.save_image(
                             fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
