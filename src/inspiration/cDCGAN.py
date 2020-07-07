@@ -16,8 +16,9 @@ parser.add_argument('--result_dir', type=str, default='./celeba_result')
 parser.add_argument('--condition_file', type=str,
                     default='./list_attr_celeba.txt')
 
-parser.add_argument('--batch_size', type=int, default=16)
+parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--nepoch', type=int, default=20)
+parser.add_argument('--workers', type=int, default=2)
 parser.add_argument('--nz', type=int, default=100)  # number of noise dimension
 parser.add_argument('--nc', type=int, default=3)  # number of result channel
 parser.add_argument('--nfeature', type=int, default=40)
@@ -25,7 +26,7 @@ parser.add_argument('--lr', type=float, default=0.0002)
 betas = (0.0, 0.99)  # adam optimizer beta1, beta2
 
 config, _ = parser.parse_known_args()
-device = 'cpu'
+device = "cuda"
 
 
 class Generator(nn.Module):
@@ -95,12 +96,9 @@ class Trainer:
         self.loss.to(device)
 
     def train(self, dataloader):
-        noise = Variable(torch.FloatTensor(
-            config.batch_size, config.nz, 1, 1).to(device))
-        label_real = Variable(torch.FloatTensor(
-            config.batch_size, 1).fill_(1).to(device))
-        label_fake = Variable(torch.FloatTensor(
-            config.batch_size, 1).fill_(0).to(device))
+        noise = Variable(torch.FloatTensor(config.batch_size, config.nz, 1, 1).to(device))
+        label_real = Variable(torch.FloatTensor(config.batch_size, 1).fill_(1).to(device))
+        label_fake = Variable(torch.FloatTensor(config.batch_size, 1).fill_(0).to(device))
         for epoch in range(config.nepoch):
             for i, (data, attr) in enumerate(dataloader, 0):
                 # train discriminator
@@ -140,13 +138,13 @@ class Trainer:
                 fake.data, '{}/result_epoch_{:03d}.png'.format(config.result_dir, epoch), normalize=True)
 
 
-dataset = ImageFeatureFolder(config.dataset_dir, config.condition_file, transform=transforms.Compose([
-    transforms.CenterCrop(178),
-    transforms.Resize(64),
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-]))
-dataloader = torch.utils.data.DataLoader(
-    dataset, batch_size=config.batch_size, shuffle=True)
-trainer = Trainer()
-trainer.train(dataloader)
+if __name__ == '__main__':
+    dataset = ImageFeatureFolder(config.dataset_dir, config.condition_file, transform=transforms.Compose([
+        transforms.CenterCrop(178),
+        transforms.Resize(64),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ]))
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=config.batch_size, num_workers=config.workers, drop_last=True, shuffle=True, pin_memory=True)
+    trainer = Trainer()
+    trainer.train(dataloader)
