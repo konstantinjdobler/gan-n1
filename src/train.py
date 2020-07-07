@@ -15,15 +15,18 @@ import random
 from architecture import Generator, Discriminator, weights_init
 from data_loading import ImageFeatureFolder
 
+from datetime import datetime
+
 
 parser = argparse.ArgumentParser("The best N Group - N1")
 
 parser.add_argument('--dataset-dir',  type=str, default='../celeba')
 parser.add_argument('--result-dir', type=str, default='./fake_samples')
 parser.add_argument('--checkpoint-dir', type=str, default='./checkpoints')
-parser.add_argument('--checkpoint-prefix', type=str, default='')
+parser.add_argument('--checkpoint-prefix', type=str, default=datetime.now().strftime("%d-%m-%Y_%H:%M:%S"))
 parser.add_argument('-s', '--save-checkpoints', dest='save_checkpoints', action='store_true')
-parser.add_argument('--nrs', '--no-random-sample', dest='random_sample', action='store_false', help='save random samples of fake faces during training')
+parser.add_argument('--nrs', '--no-random-sample', dest='random_sample', action='store_false',
+                    help='save random samples of fake faces during training')
 parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=1500,
                     help='controls how often during an epoch smaple images are saved or info is printed')
 parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
@@ -70,7 +73,10 @@ class Trainer:
         # print("Discriminator: ", self.discriminator)
 
     def train(self, dataloader):
+        #for progress visualization
         fixed_noise = torch.randn(config.batch_size, config.nz, 1, 1, device=device)
+        fixed_attr = torch.FloatTensor(config.nfeature,config.batch_size).uniform_(0,2).gt(1).int().float()
+
         noise = Variable(FloatTensor(config.batch_size, config.nz, 1, 1).to(device))
         target_real = Variable(FloatTensor(config.batch_size, 1).fill_(1).to(device))
         smooth_target_real = Variable(FloatTensor(config.batch_size, 1).fill_(1).to(device))
@@ -118,32 +124,33 @@ class Trainer:
 
                 if i % config.training_info_interval == 0:
                     if config.print_loss:
-                        tqdm.write(f"epoch {epoch+1} batch {i} | generator loss: {g_loss} | discriminator loss: {d_loss}")
+                        tqdm.write(
+                            f"epoch {epoch+1} batch {i} | generator loss: {g_loss} | discriminator loss: {d_loss}")
                     if config.random_sample:
                         vutils.save_image(
-                            fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
+                            fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
                     if config.fixed_noise_sample:
                         with torch.no_grad():
-                            fixed_fake = self.generator(fixed_noise, attr, config)
+                            fixed_fake = self.generator(fixed_noise, fixed_attr, config)
                             vutils.save_image(fixed_fake.detach(),
-                                              f'{config.result_dir}/{config.checkpoint_prefix}fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
+                                              f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
 
             ######### epoch finished ##########
             if config.print_loss:
                 tqdm.write(f"epoch {epoch+1} | generator loss: {g_loss} | discriminator loss: {d_loss}")
             if config.random_sample:
                 vutils.save_image(
-                    fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}result_epoch_{epoch + 1}.png', normalize=True)
+                    fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}.png', normalize=True)
             if config.fixed_noise_sample:
                 with torch.no_grad():
-                    fixed_fake = self.generator(fixed_noise, attr, config)
+                    fixed_fake = self.generator(fixed_noise, fixed_attr, config)
                     vutils.save_image(fixed_fake.detach(),
-                                        f'{config.result_dir}/{config.checkpoint_prefix}fixed_noise_result_epoch_{epoch + 1}.png', normalize=True)
+                                      f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}.png', normalize=True)
             if config.save_checkpoints:
                 torch.save(self.generator.state_dict(),
-                           f'{config.checkpoint_dir}/{config.checkpoint_prefix}generator_epoch_{epoch+1}.pt')
+                           f'{config.checkpoint_dir}/{config.checkpoint_prefix}/generator_epoch_{epoch+1}.pt')
                 torch.save(self.discriminator.state_dict(),
-                           f'{config.checkpoint_dir}/{config.checkpoint_prefix}discriminator_epoch_{epoch+1}.pt')
+                           f'{config.checkpoint_dir}/{config.checkpoint_prefix}/discriminator_epoch_{epoch+1}.pt')
 
 
 if __name__ == '__main__':
@@ -171,11 +178,11 @@ if __name__ == '__main__':
 
     # Create dirs if not already there
     if(config.random_sample or config.fixed_noise_sample):
-        print(f"Sample fake images will be saved to {config.result_dir}")
-        os.makedirs(config.result_dir, exist_ok=True)
+        print(f"Sample fake images will be saved to {config.result_dir}/{config.checkpoint_prefix}")
+        os.makedirs(f"{config.result_dir}/{config.checkpoint_prefix}", exist_ok=True)
     if(config.save_checkpoints):
-        print(f"Checkpoints will be saved to {config.checkpoint_dir}")
-        os.makedirs(config.checkpoint_dir, exist_ok=True)
+        print(f"Checkpoints will be saved to {config.checkpoint_dir}/{config.checkpoint_prefix}")
+        os.makedirs(f"{config.checkpoint_dir}/{config.checkpoint_prefix}", exist_ok=True)
 
     print("Loading Data")
     dataset = ImageFeatureFolder(config.dataset_dir, config.condition_file, transform=transforms.Compose([
