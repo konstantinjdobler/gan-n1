@@ -73,9 +73,9 @@ class Trainer:
         # print("Discriminator: ", self.discriminator)
 
     def train(self, dataloader):
-        #for progress visualization
+        # for progress visualization
         fixed_noise = torch.randn(config.batch_size, config.nz, 1, 1, device=device)
-        fixed_attr = torch.FloatTensor(config.nfeature,config.batch_size).uniform_(0,2).gt(1).int().float()
+        fixed_attr = torch.FloatTensor(config.nfeature, config.batch_size).uniform_(0, 2).gt(1).int().float().to(device)
 
         noise = Variable(FloatTensor(config.batch_size, config.nz, 1, 1).to(device))
         target_real = Variable(FloatTensor(config.batch_size, 1).fill_(1).to(device))
