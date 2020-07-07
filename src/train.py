@@ -23,7 +23,7 @@ parser.add_argument('--result-dir', type=str, default='./fake_samples')
 parser.add_argument('--checkpoint-dir', type=str, default='./checkpoints')
 parser.add_argument('--checkpoint-prefix', type=str, default='')
 parser.add_argument('-s', '--save-checkpoints', dest='save_checkpoints', action='store_true')
-parser.add_argument('--ni', '--no-image-generation', dest='image_generation', action='store_false')
+parser.add_argument('--nrs', '--no-random-sample', dest='random_sample', action='store_false', help='save random samples of fake faces during training')
 parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=500,
                     help='controls how often during an epoch smaple images are saved or info is printed')
 parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
@@ -40,10 +40,10 @@ parser.add_argument('-d', '--discriminator-path', dest='discriminator_path', hel
 parser.add_argument('--no-label-smoothing', dest='label_smoothing', action='store_false')
 parser.add_argument('--print-loss', dest='print_loss', action='store_true')
 parser.add_argument('--fixed-noise-sample', dest='fixed_noise_sample', action='store_true',
-                    help='show model progression by generating samples with the same noise vector')
+                    help='show model progression by generating samples with the same fixed noise vector during training')
 
 
-parser.set_defaults(save_checkpoints=False, image_generation=True,
+parser.set_defaults(save_checkpoints=False, random_sample=True,
                     label_smoothing=True, print_loss=False, fixed_noise_sample=False)
 
 # beta1 is a hyperparameter, suggestion from hack repo is 0.5
@@ -86,7 +86,7 @@ class Trainer:
                 batch_size = data.size(0)
                 target_real.data.resize_(batch_size, 1).fill_(1)
                 target_fake.data.resize_(batch_size, 1).fill_(0)
-                smooth_target_real.data.resize_(batch_size, 1).uniform_(0.7, 1.2)  # one-sided label smoothing trick
+                smooth_target_real.data.resize_(batch_size, 1).uniform_(0.7, 1.0)  # one-sided label smoothing trick
                 noise.data.resize_(batch_size, config.nz, 1, 1).normal_(0, 1)
 
                 attr = Variable(attr).to(device)
@@ -116,21 +116,27 @@ class Trainer:
                 g_loss.backward()
                 self.optimizer_generator.step()
 
-                if config.image_generation and i % config.training_info_interval == 0:
+                if i % config.training_info_interval == 0:
                     if config.print_loss:
                         tqdm.write(f"generator loss: {g_loss} | discriminator loss: {d_loss}")
-                    vutils.save_image(
-                        fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
+                    if config.random_sample:
+                        vutils.save_image(
+                            fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
                     if config.fixed_noise_sample:
                         with torch.no_grad():
                             fixed_fake = self.generator(fixed_noise, attr, config)
                             vutils.save_image(fixed_fake.detach(),
-                                          f'{config.result_dir}/{config.checkpoint_prefix}fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
+                                              f'{config.result_dir}/{config.checkpoint_prefix}fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
 
             ######### epoch finished ##########
-            if config.image_generation:
+            if config.random_sample:
                 vutils.save_image(
                     fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}result_epoch_{epoch + 1}.png', normalize=True)
+            if config.fixed_noise_sample:
+                with torch.no_grad():
+                    fixed_fake = self.generator(fixed_noise, attr, config)
+                    vutils.save_image(fixed_fake.detach(),
+                                        f'{config.result_dir}/{config.checkpoint_prefix}fixed_noise_result_epoch_{epoch + 1}.png', normalize=True)
             if config.save_checkpoints:
                 torch.save(self.generator.state_dict(),
                            f'{config.checkpoint_dir}/{config.checkpoint_prefix}generator_epoch_{epoch+1}.pt')
@@ -162,7 +168,7 @@ if __name__ == '__main__':
     cudnn.benchmark = True
 
     # Create dirs if not already there
-    if(config.image_generation):
+    if(config.random_sample or config.fixed_noise_sample):
         print(f"Sample fake images will be saved to {config.result_dir}")
         os.makedirs(config.result_dir, exist_ok=True)
     if(config.save_checkpoints):
