@@ -129,6 +129,8 @@ class Trainer:
                                               f'{config.result_dir}/{config.checkpoint_prefix}fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
 
             ######### epoch finished ##########
+            if config.print_loss:
+                tqdm.write(f"epoch {epoch+1} | generator loss: {g_loss} | discriminator loss: {d_loss}")
             if config.random_sample:
                 vutils.save_image(
                     fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}result_epoch_{epoch + 1}.png', normalize=True)
