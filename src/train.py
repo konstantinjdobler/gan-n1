@@ -26,8 +26,8 @@ parser.add_argument('-s', '--save-checkpoints', dest='save_checkpoints', action=
 parser.add_argument('--ni', '--no-image-generation', dest='image_generation', action='store_false')
 parser.add_argument('--ir', '--sample-image-rate', dest='sample_image_rate', type=int, default=500,
                     help='Save generated images every <input>th batch during an epoch')
-parser.add_argument('--condition_file', type=str, default='./list_attr_celeba.txt')
-parser.add_argument('--batch_size', type=int, default=32)
+parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
+parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--epochs', type=int, default=20)
 parser.add_argument('--workers', type=int, default=2)
 parser.add_argument('--nz', type=int, default=100)  # number of noise dimension
