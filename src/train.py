@@ -124,7 +124,7 @@ if __name__ == '__main__':
     # Create dirs if not already there
     if(config.image_generation):
         print(f"Sample fake images will be saved to {config.result_dir}")
-        os.makedirs(config.checkpoint_dir, exist_ok=True)
+        os.makedirs(config.result_dir, exist_ok=True)
     if(config.save_checkpoints):
         print(f"Checkpoints will be saved to {config.checkpoint_dir}")
         os.makedirs(config.checkpoint_dir, exist_ok=True)
