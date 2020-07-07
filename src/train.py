@@ -23,7 +23,9 @@ parser.add_argument('--result-dir', type=str, default='./fake_samples')
 parser.add_argument('--checkpoint-dir', type=str, default='./checkpoints')
 parser.add_argument('--checkpoint-prefix', type=str, default='')
 parser.add_argument('-s', '--save-checkpoints', dest='save_checkpoints', action='store_true')
-parser.add_argument('-ni', '--no-image-generation', dest='image_generation', action='store_false')
+parser.add_argument('--ni', '--no-image-generation', dest='image_generation', action='store_false')
+parser.add_argument('--ir', '--sample-image-rate', dest='sample_image_rate', type=int, default=500,
+                    help='Save generated images every <input>th batch during an epoch')
 parser.add_argument('--condition_file', type=str, default='./list_attr_celeba.txt')
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--epochs', type=int, default=20)
@@ -36,8 +38,6 @@ parser.add_argument('--manual-seed', type=int, required=False)
 parser.set_defaults(save_checkpoints=False, image_generation=True)
 
 betas = (0.0, 0.99)  # adam optimizer beta1, beta2
-
-
 
 
 class Trainer:
@@ -83,14 +83,14 @@ class Trainer:
                 g_loss = self.loss(d_fake, label_real)
                 g_loss.backward()
                 self.optimizer_generator.step()
-                # if i % 50 == 0:
-                #   tqdm.write(f"[{i}/{len(dataloader)}] batches | epoch {epoch +1} batch{i} pictures saved")
-                #   vutils.save_image(
-                #     fake.data, f'{config.result_dir}/result_epoch_{epoch + 1}_batch_{i+1}.png', normalize=True)
+                if config.image_generation and i % config.sample_image_rate == 0:
+                    vutils.save_image(
+                        fake.data, f'{config.result_dir}/{config.checkpoint_prefix}result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
 
             tqdm.write(f"epoch{epoch +1} d_real: {d_real}, d_fake: {d_fake}")
-            vutils.save_image(fake.data, f'{config.result_dir}/result_epoch_{epoch + 1}.png', normalize=True)
-            # do checkpointing
+            if config.image_generation:
+                vutils.save_image(
+                    fake.data, f'{config.result_dir}/{config.checkpoint_prefix}result_epoch_{epoch + 1}.png', normalize=True)
             if config.save_checkpoints:
                 torch.save(self.generator.state_dict(),
                            f'{config.checkpoint_dir}/{config.checkpoint_prefix}generator_epoch_{epoch+1}.pt')
@@ -101,7 +101,7 @@ class Trainer:
 if __name__ == '__main__':
     config, _ = parser.parse_known_args()
     if torch.cuda.is_available():
-        device = torch.device("cuda:0")  
+        device = torch.device("cuda:0")
         FloatTensor = torch.cuda.FloatTensor
         print("Running on the GPU")
     else:
@@ -112,7 +112,7 @@ if __name__ == '__main__':
     if config.manual_seed is None:
         config.manual_seed = random.randint(1, 10000)
         print("Random Seed: ", config.manual_seed)
-    
+
     random.seed(config.manual_seed)
     torch.manual_seed(config.manual_seed)
 
