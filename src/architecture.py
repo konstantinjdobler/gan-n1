@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch
 
+
 class Generator(nn.Module):
     def __init__(self, config):
         super(Generator, self).__init__()
@@ -45,9 +46,21 @@ class Discriminator(nn.Module):
             nn.BatchNorm2d(512),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv2d(512, 1, 4, 1, 0, bias=False),
+            nn.Sigmoid()
+
         )
 
     def forward(self, x, attr):
         attr = self.feature_input(attr).view(-1, 1, 64, 64)
         x = torch.cat([x, attr], 1)
         return self.main(x).view(-1, 1)
+
+
+# custom weights initialization called on netG and netD
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        torch.nn.init.normal_(m.weight, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        torch.nn.init.normal_(m.weight, 1.0, 0.02)
+        torch.nn.init.zeros_(m.bias)

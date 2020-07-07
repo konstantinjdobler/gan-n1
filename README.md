@@ -13,5 +13,6 @@ https://github.com/rosinality/stylegan2-pytorch
 https://github.com/HighCWu/Condition-StyleGAN-PyTorch
 
 # Interesting links
-
+https://github.com/soumith/ganhacks
+https://machinelearningmastery.com/how-to-train-stable-generative-adversarial-networks/ resource for improvement heuristics for GANs
 https://www.youtube.com/watch?v=dCKbRCUyop8 Video about StyleGAN concepts with impressive presentation style
