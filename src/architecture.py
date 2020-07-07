@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 
 class Generator(nn.Module):
-    def __init__(self):
+    def __init__(self, config):
         super(Generator, self).__init__()
         self.main = nn.Sequential(
             nn.ConvTranspose2d(config.nz + config.nfeature,
@@ -22,14 +22,14 @@ class Generator(nn.Module):
             nn.Tanh(),
         )
 
-    def forward(self, x, attr):
+    def forward(self, x, attr, config):
         attr = attr.view(-1, config.nfeature, 1, 1)
         x = torch.cat([x, attr], 1)
         return self.main(x)
 
 
 class Discriminator(nn.Module):
-    def __init__(self):
+    def __init__(self, config):
         super(Discriminator, self).__init__()
         self.feature_input = nn.Linear(config.nfeature, 64 * 64)
         self.main = nn.Sequential(
