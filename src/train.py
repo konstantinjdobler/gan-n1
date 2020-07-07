@@ -8,7 +8,9 @@ import torch.utils.data
 import torchvision.utils as vutils
 import torchvision.transforms as transforms
 import torch.nn as nn
+import torch.backends.cudnn as cudnn
 from tqdm import tqdm
+import random
 
 from architecture import Generator, Discriminator
 from data_loading import ImageFeatureFolder
@@ -16,19 +18,23 @@ from data_loading import ImageFeatureFolder
 
 parser = argparse.ArgumentParser("The best N Group - N1")
 
-parser.add_argument('--dataset_dir', type=str, default='../celeba')
-parser.add_argument('--result_dir', type=str, default='./celeba_result')
-parser.add_argument('--checkpoint_dir', type=str, default='./checkpoints')
-parser.add_argument('--checkpoint_prefix', type=str, default='')
-parser.add_argument('--save_checkpoints', type=bool, default=False)
+parser.add_argument('--dataset-dir',  type=str, default='../celeba')
+parser.add_argument('--result-dir', type=str, default='./fake_samples')
+parser.add_argument('--checkpoint-dir', type=str, default='./checkpoints')
+parser.add_argument('--checkpoint-prefix', type=str, default='')
+parser.add_argument('-s', '--save-checkpoints', dest='save_checkpoints', action='store_true')
+parser.add_argument('-ni', '--no-image-generation', dest='image_generation', action='store_false')
 parser.add_argument('--condition_file', type=str, default='./list_attr_celeba.txt')
 parser.add_argument('--batch_size', type=int, default=32)
-parser.add_argument('--nepoch', type=int, default=20)
+parser.add_argument('--epochs', type=int, default=20)
 parser.add_argument('--workers', type=int, default=2)
 parser.add_argument('--nz', type=int, default=100)  # number of noise dimension
 parser.add_argument('--nc', type=int, default=3)  # number of result channel
 parser.add_argument('--nfeature', type=int, default=40)
 parser.add_argument('--lr', type=float, default=0.0002)
+parser.add_argument('--manual-seed', type=int, required=False)
+parser.set_defaults(save_checkpoints=False, image_generation=True)
+
 betas = (0.0, 0.99)  # adam optimizer beta1, beta2
 
 
@@ -50,7 +56,7 @@ class Trainer:
         noise = Variable(FloatTensor(config.batch_size, config.nz, 1, 1).to(device))
         label_real = Variable(FloatTensor(config.batch_size, 1).fill_(1).to(device))
         label_fake = Variable(FloatTensor(config.batch_size, 1).fill_(0).to(device))
-        for epoch in range(config.nepoch):
+        for epoch in range(config.epochs):
             for i, (data, attr) in tqdm(enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch+1}"):
                 # train discriminator
                 self.discriminator.zero_grad()
@@ -95,7 +101,7 @@ class Trainer:
 if __name__ == '__main__':
     config, _ = parser.parse_known_args()
     if torch.cuda.is_available():
-        device = torch.device("cuda:0")  # you can continue going on here, like cuda:1 cuda:2....etc.
+        device = torch.device("cuda:0")  
         FloatTensor = torch.cuda.FloatTensor
         print("Running on the GPU")
     else:
@@ -103,9 +109,26 @@ if __name__ == '__main__':
         device = torch.device("cpu")
         print("Running on the CPU")
 
+    if config.manual_seed is None:
+        config.manual_seed = random.randint(1, 10000)
+        print("Random Seed: ", config.manual_seed)
+    
+    random.seed(config.manual_seed)
+    torch.manual_seed(config.manual_seed)
+
+    # Boost performace by selecting optimal torch-internal algorithms for hardware config
+    # This adds a bit of overhaed at the beginning, but is faster at every other iteration
+    # Training data needs to be of constant shape for full effect
+    cudnn.benchmark = True
+
     # Create dirs if not already there
-    os.makedirs(config.result_dir, exist_ok=True)
-    os.makedirs(config.checkpoint_dir, exist_ok=True)
+    if(config.image_generation):
+        print(f"Sample fake images will be saved to {config.result_dir}")
+        os.makedirs(config.checkpoint_dir, exist_ok=True)
+    if(config.save_checkpoints):
+        print(f"Checkpoints will be saved to {config.checkpoint_dir}")
+        os.makedirs(config.checkpoint_dir, exist_ok=True)
+
     print("Loading Data")
     dataset = ImageFeatureFolder(config.dataset_dir, config.condition_file, transform=transforms.Compose([
         transforms.CenterCrop(178),
