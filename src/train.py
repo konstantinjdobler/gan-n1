@@ -44,10 +44,14 @@ parser.add_argument('--no-label-smoothing', dest='label_smoothing', action='stor
 parser.add_argument('--print-loss', dest='print_loss', action='store_true')
 parser.add_argument('--fixed-noise-sample', dest='fixed_noise_sample', action='store_true',
                     help='show model progression by generating samples with the same fixed noise vector during training')
+parser.add_argument('--target-image-size', type=int, default=64)
+parser.add_argument('--gf', '--generator-filters', dest='generator_filters', type=int, default=64)
+parser.add_argument('--df', '--discriminator-filters', dest='discriminator_filters', type=int, default=64)
+parser.add_argument('--hd-crop', dest='hd_crop', action='store_true')
 
 
 parser.set_defaults(save_checkpoints=False, random_sample=True,
-                    label_smoothing=True, print_loss=False, fixed_noise_sample=False)
+                    label_smoothing=True, print_loss=False, fixed_noise_sample=False, hd_crop=False)
 
 # beta1 is a hyperparameter, suggestion from hack repo is 0.5
 betas = (0.5, 0.99)  # adam optimizer beta1, beta2
@@ -97,10 +101,10 @@ class Trainer:
 
                 attr = Variable(attr).to(device)
                 real_faces = Variable(data).to(device)
-                d_real_faces = self.discriminator(real_faces, attr)
+                d_real_faces = self.discriminator(real_faces, attr, config)
 
                 fake_faces = self.generator(noise, attr, config)
-                d_fake_faces = self.discriminator(fake_faces.detach(), attr)  # not update generator
+                d_fake_faces = self.discriminator(fake_faces.detach(), attr, config)  # not update generator
 
                 d_loss = self.loss(d_real_faces, smooth_target_real if config.label_smoothing else target_real) + \
                     self.loss(d_fake_faces, target_fake)
@@ -117,7 +121,7 @@ class Trainer:
                 # noise.data.normal_(0, 1)
                 # fake_faces = self.generator(noise, attr, config)
 
-                d_fake = self.discriminator(fake_faces, attr)
+                d_fake = self.discriminator(fake_faces, attr, config)
                 g_loss = self.loss(d_fake, target_real)
                 g_loss.backward()
                 self.optimizer_generator.step()
@@ -185,14 +189,15 @@ if __name__ == '__main__':
         os.makedirs(f"{config.checkpoint_dir}/{config.checkpoint_prefix}", exist_ok=True)
 
     print("Loading Data")
-    dataset = ImageFeatureFolder(config.dataset_dir, config.condition_file, transform=transforms.Compose([
-        transforms.CenterCrop(178),
-        transforms.Resize(64),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ]))
+    transformers = [] if config.hd_crop else [transforms.CenterCrop(178)]
+    transformers.extend([transforms.Resize(config.target_image_size),
+                         transforms.ToTensor(),
+                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    dataset = ImageFeatureFolder(config.dataset_dir, config.condition_file, transform=transforms.Compose(transformers))
+
     dataloader = torch.utils.data.DataLoader(
         dataset, batch_size=config.batch_size, num_workers=config.workers, drop_last=True, shuffle=True, pin_memory=True)
-    trainer = Trainer()
+
     print("Starting Training")
+    trainer = Trainer()
     trainer.train(dataloader)
