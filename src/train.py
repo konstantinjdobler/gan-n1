@@ -30,13 +30,13 @@ parser.add_argument('--nrs', '--no-random-sample', dest='random_sample', action=
 parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=1500,
                     help='controls how often during an epoch smaple images are saved or info is printed')
 parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
-parser.add_argument('--batch-size', type=int, default=32)
+parser.add_argument('--batch-size', dest="batch_size", type=int, default=32)
 parser.add_argument('--epochs', type=int, default=20)
 parser.add_argument('--workers', type=int, default=2)
 parser.add_argument('--nz', type=int, default=100)  # number of noise dimension
 parser.add_argument('--nc', type=int, default=3)  # number of result channel
 parser.add_argument('--nfeature', type=int, default=40)
-parser.add_argument('--lr', type=float, default=5e-5)
+parser.add_argument('--lr', type=float, default=0.00005)
 parser.add_argument('--seed', dest='manual_seed', type=int, required=False)
 parser.add_argument('-g', '--generator-path', dest='generator_path', help='use pretrained generator')
 parser.add_argument('-d', '--discriminator-path', dest='discriminator_path', help='use pretrained discriminator')
@@ -44,7 +44,7 @@ parser.add_argument('--no-label-smoothing', dest='label_smoothing', action='stor
 parser.add_argument('--print-loss', dest='print_loss', action='store_true')
 parser.add_argument('--fixed-noise-sample', dest='fixed_noise_sample', action='store_true',
                     help='show model progression by generating samples with the same fixed noise vector during training')
-parser.add_argument('--target-image-size', type=int, default=64)
+parser.add_argument('--target-image-size', dest="target_image_size", type=int, default=64)
 parser.add_argument('--gf', '--generator-filters', dest='generator_filters', type=int, default=64)
 parser.add_argument('--df', '--discriminator-filters', dest='discriminator_filters', type=int, default=64)
 parser.add_argument('--hd-crop', dest='hd_crop', action='store_true')
@@ -90,7 +90,6 @@ class Trainer:
         smooth_target_real = Variable(FloatTensor(config.batch_size, 1).fill_(1).to(device))
         target_fake = Variable(FloatTensor(config.batch_size, 1).fill_(0).to(device))
         for epoch in range(config.epochs):
-            updateCounter = 0
             for i, (data, attr) in tqdm(enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch+1}"):
 
                 ############################
@@ -113,7 +112,7 @@ class Trainer:
 
                 #d_loss = self.loss(d_real_faces, smooth_target_real if config.label_smoothing else target_real) + \
                 #    self.loss(d_fake_faces, target_fake)
-                d_loss = -(torch.mean(d_real_faces) - torch.mean(d_fake_faces))
+                d_loss = -torch.mean(d_real_faces) + torch.mean(d_fake_faces)
                 d_loss.backward()
                 self.optimizer_discriminator.step()
 
@@ -121,11 +120,10 @@ class Trainer:
                 for p in self.discriminator.parameters():
                     p.data.clamp_(-0.01, 0.01)
 
-                if updateCounter % 5 == 0:
+                if i % 5 == 0:
                     ############################
                     # (2) Update G network: maximize log(D(G(z)))
                     ###########################
-
                     self.generator.zero_grad()
 
                     # TODO: test if we really want to train the generator with new fake faces or instead use the ones we already used wiht the discriminator
@@ -150,7 +148,6 @@ class Trainer:
                             fixed_fake = self.generator(fixed_noise, fixed_attr, config)
                             vutils.save_image(fixed_fake.detach(),
                                             f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
-                updateCounter += 1
 
             ######### epoch finished ##########
             if config.print_loss:

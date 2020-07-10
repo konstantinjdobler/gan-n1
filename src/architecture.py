@@ -105,6 +105,8 @@ class Discriminator(nn.Module):
         self.feature_input = nn.Linear(config.nfeature,
                                        config.target_image_size * config.target_image_size)
 
+        self.filters = config.discriminator_filters
+
         adjustment_to_image_size = config.target_image_size // 64  # 64 is standard input
         self.main = nn.Sequential(
             # input: (nc) x 64 x 64 (using image size 64)
@@ -124,19 +126,23 @@ class Discriminator(nn.Module):
 
             Conv2dBlock(in_channels=config.discriminator_filters * 4,
                         out_channels=config.discriminator_filters * 8,
-                        downsampling_factor=2),
+                        downsampling_factor=2)
             # state: (discriminator_filters*8) x 4 x 4
 
-            Conv2dBlock(in_channels=config.discriminator_filters * 8,
-                        out_channels=1, kernel_size=4, stride=1, padding=0,
-                        batch_norm=False, activation_function=None),
+            #Conv2dBlock(in_channels=config.discriminator_filters * 8,
+            #            out_channels=1, kernel_size=4, stride=1, padding=0,
+            #            batch_norm=False, activation_function=None),
             # output: 1 x 1 x 1
         )
+
+        self.linear = nn.Linear(config.discriminator_filters * 8 * 4 * 4, 1)
 
     def forward(self, x, attr, config):
         attr = self.feature_input(attr).view(-1, 1, config.target_image_size, config.target_image_size)
         x = torch.cat([x, attr], 1)
-        return self.main(x).view(-1, 1)
+        out = self.main(x)
+        out = out.view(-1, 4*4*8*self.filters)
+        return self.linear(out)
 
 
 # custom weights initialization called on netG and netD
