@@ -36,7 +36,7 @@ parser.add_argument('--workers', type=int, default=2)
 parser.add_argument('--nz', type=int, default=100)  # number of noise dimension
 parser.add_argument('--nc', type=int, default=3)  # number of result channel
 parser.add_argument('--nfeature', type=int, default=40)
-parser.add_argument('--lr', type=float, default=0.0002)
+parser.add_argument('--lr', type=float, default=5e-5)
 parser.add_argument('--seed', dest='manual_seed', type=int, required=False)
 parser.add_argument('-g', '--generator-path', dest='generator_path', help='use pretrained generator')
 parser.add_argument('-d', '--discriminator-path', dest='discriminator_path', help='use pretrained discriminator')
@@ -62,9 +62,11 @@ class Trainer:
         self.generator = Generator(config).to(device)
         self.discriminator = Discriminator(config).to(device)
         # experiment with different loss functions, TODO: test out Wasserstein loss
-        self.loss = nn.BCELoss().to(device)
-        self.optimizer_generator = optim.Adam(self.generator.parameters(), lr=config.lr, betas=betas)
-        self.optimizer_discriminator = optim.Adam(self.discriminator.parameters(), lr=config.lr, betas=betas)
+        #self.loss = nn.BCELoss().to(device) 
+       # self.optimizer_generator = optim.Adam(self.generator.parameters(), lr=config.lr, betas=betas)
+       # self.optimizer_discriminator = optim.Adam(self.discriminator.parameters(), lr=config.lr, betas=betas)
+        self.optimizer_generator = optim.RMSprop(self.generator.parameters(), lr=config.lr)
+        self.optimizer_discriminator = optim.RMSprop(self.discriminator.parameters(), lr=config.lr)
 
         self.generator.apply(weights_init)
         if config.generator_path is not None:
@@ -77,6 +79,8 @@ class Trainer:
         # print("Discriminator: ", self.discriminator)
 
     def train(self, dataloader):
+        updateCounter = 0
+
         # for progress visualization
         fixed_noise = torch.randn(config.batch_size, config.nz, 1, 1, device=device)
         fixed_attr = torch.FloatTensor(config.nfeature, config.batch_size).uniform_(0, 2).gt(1).int().float().to(device)
@@ -86,6 +90,7 @@ class Trainer:
         smooth_target_real = Variable(FloatTensor(config.batch_size, 1).fill_(1).to(device))
         target_fake = Variable(FloatTensor(config.batch_size, 1).fill_(0).to(device))
         for epoch in range(config.epochs):
+            updateCounter = 0
             for i, (data, attr) in tqdm(enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch+1}"):
 
                 ############################
@@ -106,25 +111,32 @@ class Trainer:
                 fake_faces = self.generator(noise, attr, config)
                 d_fake_faces = self.discriminator(fake_faces.detach(), attr, config)  # not update generator
 
-                d_loss = self.loss(d_real_faces, smooth_target_real if config.label_smoothing else target_real) + \
-                    self.loss(d_fake_faces, target_fake)
+                #d_loss = self.loss(d_real_faces, smooth_target_real if config.label_smoothing else target_real) + \
+                #    self.loss(d_fake_faces, target_fake)
+                d_loss = -(torch.mean(d_real_faces) - torch.mean(d_fake_faces))
                 d_loss.backward()
                 self.optimizer_discriminator.step()
 
-                ############################
-                # (2) Update G network: maximize log(D(G(z)))
-                ###########################
+                # Weight clipping
+                for p in self.discriminator.parameters():
+                    p.data.clamp_(-0.01, 0.01)
 
-                self.generator.zero_grad()
+                if updateCounter % 5 == 0:
+                    ############################
+                    # (2) Update G network: maximize log(D(G(z)))
+                    ###########################
 
-                # TODO: test if we really want to train the generator with new fake faces or instead use the ones we already used wiht the discriminator
-                # noise.data.normal_(0, 1)
-                # fake_faces = self.generator(noise, attr, config)
+                    self.generator.zero_grad()
 
-                d_fake = self.discriminator(fake_faces, attr, config)
-                g_loss = self.loss(d_fake, target_real)
-                g_loss.backward()
-                self.optimizer_generator.step()
+                    # TODO: test if we really want to train the generator with new fake faces or instead use the ones we already used wiht the discriminator
+                    # noise.data.normal_(0, 1)
+                    # fake_faces = self.generator(noise, attr, config)
+
+                    d_fake = self.discriminator(fake_faces, attr, config)
+                    #g_loss = self.loss(d_fake, target_real)
+                    g_loss = -torch.mean(d_fake)
+                    g_loss.backward()
+                    self.optimizer_generator.step()
 
                 if i % config.training_info_interval == 0:
                     if config.print_loss:
@@ -137,7 +149,8 @@ class Trainer:
                         with torch.no_grad():
                             fixed_fake = self.generator(fixed_noise, fixed_attr, config)
                             vutils.save_image(fixed_fake.detach(),
-                                              f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
+                                            f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
+                updateCounter += 1
 
             ######### epoch finished ##########
             if config.print_loss:

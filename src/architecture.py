@@ -27,7 +27,10 @@ class ConvTranspose2dBlock(nn.Module):
         out = self.conv_layer(x)
         if self.batch_norm:
             out = self.batch_norm(out)
-        return self.activation(out)
+        if self.activation:
+            return self.activation(out)
+        else:
+            return out
 
 
 class Conv2dBlock(nn.Module):
@@ -53,7 +56,10 @@ class Conv2dBlock(nn.Module):
         out = self.conv_layer(x)
         if self.batch_norm:
             out = self.batch_norm(out)
-        return self.activation(out)
+        if self.activation:
+            return self.activation(out)
+        else:
+            return out
 
 
 class Generator(nn.Module):
@@ -123,7 +129,7 @@ class Discriminator(nn.Module):
 
             Conv2dBlock(in_channels=config.discriminator_filters * 8,
                         out_channels=1, kernel_size=4, stride=1, padding=0,
-                        batch_norm=False, activation_function=nn.Sigmoid()),
+                        batch_norm=False, activation_function=None),
             # output: 1 x 1 x 1
         )
 
