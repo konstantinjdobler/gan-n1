@@ -127,41 +127,42 @@ class Trainer:
                 g_loss = self.loss(d_fake, target_real)
                 g_loss.backward()
                 self.optimizer_generator.step()
-                batch_training_info_and_samples(config, fake_faces, fixed_noise, fixed_attr)
-            epoch_training_info_and_samples(config, fake_faces, fixed_noise, fixed_attr)    
+                self.batch_training_info_and_samples(epoch, i, g_loss, d_loss, config,
+                                                     fake_faces, fixed_noise, fixed_attr)
+            self.epoch_training_info_and_samples(epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr)
             ######### epoch finished ##########
 
-        def batch_training_info_and_samples(self, config, fake_faces, fixed_noise, fixed_attr):
-            if config.print_loss and i > 0 and  i % config.training_info_interval == 0 :
-                if config.print_loss:
-                    tqdm.write(
-                        f"epoch {epoch+1} batch {i} | generator loss: {g_loss} | discriminator loss: {d_loss}")
-            if i % config.training_info_interval == 0:
-                if config.random_sample:
-                    vutils.save_image(
-                        fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
-                if config.fixed_noise_sample:
-                    with torch.no_grad():
-                        fixed_fake = self.generator(fixed_noise, fixed_attr, config)
-                        vutils.save_image(fixed_fake.detach(),
-                                            f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
-        
-        def epoch_training_info_and_samples(self, config, fake_faces, fixed_noise, fixed_attr):
+    def batch_training_info_and_samples(self, epoch, batch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr):
+        if config.print_loss and batch > 0 and batch % config.training_info_interval == 0:
             if config.print_loss:
-                tqdm.write(f"epoch {epoch+1} | generator loss: {g_loss} | discriminator loss: {d_loss}")
+                tqdm.write(
+                    f"epoch {epoch+1} batch {batch} | generator loss: {g_loss} | discriminator loss: {d_loss}")
+        if batch % config.training_info_interval == 0:
             if config.random_sample:
                 vutils.save_image(
-                    fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}.png', normalize=True)
+                    fake_faces.data[:min(config.batch_size, 32)], f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}_batch_{batch}.png', normalize=True)
             if config.fixed_noise_sample:
                 with torch.no_grad():
                     fixed_fake = self.generator(fixed_noise, fixed_attr, config)
-                    vutils.save_image(fixed_fake.detach(),
-                                      f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}.png', normalize=True)
-            if config.save_checkpoints:
-                torch.save(self.generator.state_dict(),
-                           f'{config.checkpoint_dir}/{config.checkpoint_prefix}/generator_epoch_{epoch+1}.pt')
-                torch.save(self.discriminator.state_dict(),
-                           f'{config.checkpoint_dir}/{config.checkpoint_prefix}/discriminator_epoch_{epoch+1}.pt')
+                    vutils.save_image(fixed_fake.detach()[:min(config.batch_size, 32)],
+                                      f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{batch}.png', normalize=True)
+
+    def epoch_training_info_and_samples(self, epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr):
+        if config.print_loss:
+            tqdm.write(f"epoch {epoch+1} | generator loss: {g_loss} | discriminator loss: {d_loss}")
+        if config.random_sample:
+            vutils.save_image(
+                fake_faces.data[:min(config.batch_size, 32)], f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}.png', normalize=True)
+        if config.fixed_noise_sample:
+            with torch.no_grad():
+                fixed_fake = self.generator(fixed_noise, fixed_attr, config)
+                vutils.save_image(fixed_fake.detach()[:min(config.batch_size, 32)],
+                                  f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}.png', normalize=True)
+        if config.save_checkpoints:
+            torch.save(self.generator.state_dict(),
+                       f'{config.checkpoint_dir}/{config.checkpoint_prefix}/generator_epoch_{epoch+1}.pt')
+            torch.save(self.discriminator.state_dict(),
+                       f'{config.checkpoint_dir}/{config.checkpoint_prefix}/discriminator_epoch_{epoch+1}.pt')
 
 
 if __name__ == '__main__':
