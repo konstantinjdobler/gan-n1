@@ -27,8 +27,10 @@ parser.add_argument('--checkpoint-prefix', type=str, default=datetime.now().strf
 parser.add_argument('-s', '--save-checkpoints', dest='save_checkpoints', action='store_true')
 parser.add_argument('--nrs', '--no-random-sample', dest='random_sample', action='store_false',
                     help='save random samples of fake faces during training')
-parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=1500,
-                    help='controls how often during an epoch smaple images are saved or info is printed')
+parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=800,
+                    help='controls how often during an epoch info is printed')
+parser.add_argument('--si', '--sample-interval', dest='sample_interval', type=int, default=1500,
+                    help='controls how often during an epoch smaple images are saved ')
 parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
 parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--epochs', type=int, default=20)
@@ -117,7 +119,7 @@ class Trainer:
 
                 self.generator.zero_grad()
 
-                # TODO: test if we really want to train the generator with new fake faces or instead use the ones we already used wiht the discriminator
+                # TODO: test if we want to train the generator with new fake faces or instead use the ones we already used wiht the discriminator
                 # noise.data.normal_(0, 1)
                 # fake_faces = self.generator(noise, attr, config)
 
@@ -125,36 +127,42 @@ class Trainer:
                 g_loss = self.loss(d_fake, target_real)
                 g_loss.backward()
                 self.optimizer_generator.step()
-
-                if i % config.training_info_interval == 0:
-                    if config.print_loss:
-                        tqdm.write(
-                            f"epoch {epoch+1} batch {i} | generator loss: {g_loss} | discriminator loss: {d_loss}")
-                    if config.random_sample:
-                        vutils.save_image(
-                            fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
-                    if config.fixed_noise_sample:
-                        with torch.no_grad():
-                            fixed_fake = self.generator(fixed_noise, fixed_attr, config)
-                            vutils.save_image(fixed_fake.detach(),
-                                              f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{i}.png', normalize=True)
-
+                self.batch_training_info_and_samples(epoch, i, g_loss, d_loss, config,
+                                                     fake_faces, fixed_noise, fixed_attr)
+            self.epoch_training_info_and_samples(epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr)
             ######### epoch finished ##########
+
+    def batch_training_info_and_samples(self, epoch, batch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr):
+        if config.print_loss and batch > 0 and batch % config.training_info_interval == 0:
             if config.print_loss:
-                tqdm.write(f"epoch {epoch+1} | generator loss: {g_loss} | discriminator loss: {d_loss}")
+                tqdm.write(
+                    f"epoch {epoch+1} batch {batch} | generator loss: {g_loss} | discriminator loss: {d_loss}")
+        if batch % config.training_info_interval == 0:
             if config.random_sample:
                 vutils.save_image(
-                    fake_faces.data, f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}.png', normalize=True)
+                    fake_faces.data[:min(config.batch_size, 32)], f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}_batch_{batch}.png', normalize=True)
             if config.fixed_noise_sample:
                 with torch.no_grad():
                     fixed_fake = self.generator(fixed_noise, fixed_attr, config)
-                    vutils.save_image(fixed_fake.detach(),
-                                      f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}.png', normalize=True)
-            if config.save_checkpoints:
-                torch.save(self.generator.state_dict(),
-                           f'{config.checkpoint_dir}/{config.checkpoint_prefix}/generator_epoch_{epoch+1}.pt')
-                torch.save(self.discriminator.state_dict(),
-                           f'{config.checkpoint_dir}/{config.checkpoint_prefix}/discriminator_epoch_{epoch+1}.pt')
+                    vutils.save_image(fixed_fake.detach()[:min(config.batch_size, 32)],
+                                      f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{batch}.png', normalize=True)
+
+    def epoch_training_info_and_samples(self, epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr):
+        if config.print_loss:
+            tqdm.write(f"epoch {epoch+1} | generator loss: {g_loss} | discriminator loss: {d_loss}")
+        if config.random_sample:
+            vutils.save_image(
+                fake_faces.data[:min(config.batch_size, 32)], f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}.png', normalize=True)
+        if config.fixed_noise_sample:
+            with torch.no_grad():
+                fixed_fake = self.generator(fixed_noise, fixed_attr, config)
+                vutils.save_image(fixed_fake.detach()[:min(config.batch_size, 32)],
+                                  f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}.png', normalize=True)
+        if config.save_checkpoints:
+            torch.save(self.generator.state_dict(),
+                       f'{config.checkpoint_dir}/{config.checkpoint_prefix}/generator_epoch_{epoch+1}.pt')
+            torch.save(self.discriminator.state_dict(),
+                       f'{config.checkpoint_dir}/{config.checkpoint_prefix}/discriminator_epoch_{epoch+1}.pt')
 
 
 if __name__ == '__main__':
