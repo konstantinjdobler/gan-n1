@@ -47,6 +47,8 @@ parser.add_argument('--no-label-smoothing', dest='label_smoothing', action='stor
 parser.add_argument('--no-label-flipping', dest='label_flipping', action='store_false')
 
 parser.add_argument('--print-loss', dest='print_loss', action='store_true')
+parser.add_argument('--show-loss-plot', dest='show_loss_plot', action='store_true')
+
 parser.add_argument('--fixed-noise-sample', dest='fixed_noise_sample', action='store_true',
                     help='show model progression by generating samples with the same fixed noise vector during training')
 parser.add_argument('--target-image-size', type=int, default=64)
@@ -56,7 +58,7 @@ parser.add_argument('--no-hd-crop', dest='hd_crop', action='store_false')
 
 
 parser.set_defaults(save_checkpoints=False, random_sample=True, label_flipping=True,
-                    label_smoothing=True, print_loss=False, fixed_noise_sample=False, hd_crop=True)
+                    label_smoothing=True, print_loss=False, show_loss_plot=False, fixed_noise_sample=False, hd_crop=True)
 
 # beta1 is a hyperparameter, suggestion from hack repo is 0.5
 betas = (0.5, 0.99)  # adam optimizer beta1, beta2
@@ -176,9 +178,9 @@ class Trainer:
         plt.legend(loc="upper left")
         plt.ylabel('Loss')
         plt.xlabel('Iterations')
-        plt.savefig(f"output/loss_visualization_{epoch}.png")
+        plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
 
-        if config.show_loss_visualization:
+        if config.show_loss_plot:
             plt.show()
 
         if config.print_loss:
