@@ -7,3 +7,4 @@ toml==0.10.1
 torch==1.5.1
 torchvision==0.6.1
 tqdm==4.47.0
+d2l==0.13.2 -f https://d2l.ai/whl.html
