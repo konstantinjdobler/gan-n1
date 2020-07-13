@@ -173,7 +173,7 @@ class Trainer:
                                       f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{batch}.png', normalize=True)
 
     def epoch_training_info_and_samples(self, epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr):
-        for key, values in self.LOG.values():
+        for key, values in self.LOG.items():
             plt.plot(values, label=key)
         plt.legend(loc="upper left")
         plt.ylabel('Loss')
