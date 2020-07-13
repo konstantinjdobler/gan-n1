@@ -108,17 +108,17 @@ class Trainer:
                 ############################
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
-                
+
                 self.discriminator.zero_grad()
 
                 if config.label_smoothing:
                     discriminator_target_real.data.uniform_(0.7, 1.0)  # one-sided label smoothing trick
                 if config.label_flipping:
                     discriminator_target_real.data = self.randomly_flip_labels(
-                        discriminator_target_real.data, p=0.05) # label flipping trick
+                        discriminator_target_real.data, p=0.05)  # label flipping trick
                     discriminator_target_fake.data = self.randomly_flip_labels(
-                        discriminator_target_fake.data, p=0.05) # label flipping trick
-                
+                        discriminator_target_fake.data, p=0.05)  # label flipping trick
+
                 z_noise.data.normal_(0, 1)
 
                 attr = Variable(attr).to(device)
@@ -128,8 +128,8 @@ class Trainer:
                 fake_faces = self.generator(z_noise, attr, config)
                 d_fake_faces = self.discriminator(fake_faces.detach(), attr, config)  # not update generator
 
-
-                d_loss = self.loss(d_real_faces, discriminator_target_real) + self.loss(d_fake_faces, discriminator_target_fake)
+                d_loss = self.loss(d_real_faces, discriminator_target_real) + \
+                    self.loss(d_fake_faces, discriminator_target_fake)
                 d_loss.backward()
                 self.optimizer_discriminator.step()
 
@@ -153,8 +153,8 @@ class Trainer:
             ######### epoch finished ##########
 
     def batch_training_info_and_samples(self, epoch, batch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr):
-        self.LOG.loss_generator.append(g_loss)
-        self.LOG.loss_descriminator.append(d_loss)
+        self.LOG["loss_generator"].append(g_loss)
+        self.LOG["loss_descriminator"].append(d_loss)
 
         if config.print_loss and batch > 0 and batch % config.training_info_interval == 0:
             if config.print_loss:
@@ -177,7 +177,7 @@ class Trainer:
         plt.ylabel('Loss')
         plt.xlabel('Iterations')
         plt.savefig(f"output/loss_visualization_{epoch}.png")
-        
+
         if config.show_loss_visualization:
             plt.show()
 
