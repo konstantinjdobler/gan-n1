@@ -13,6 +13,7 @@ https://github.com/rosinality/stylegan2-pytorch
 https://github.com/HighCWu/Condition-StyleGAN-PyTorch
 
 Progressive Wasserstein GAN with gradient penalty: https://github.com/shanexn/pytorch-pggan
+Official Pytorch implementation for progressive GAN (amongst others): https://github.com/facebookresearch/pytorch_GAN_zoo
 
 # Interesting links
 resource for improvement heuristics for GANs
