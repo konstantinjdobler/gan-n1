@@ -18,6 +18,7 @@ Official Pytorch implementation for progressive GAN (amongst others): https://gi
 
 Repository to a paper, they use Multi-Scale Gradients (MSG) to speed up the network, especially when generating higher resulotion images (also used on CelebA) 
 https://github.com/akanimax/msg-stylegan-tf
+http://arxiv-export-lb.library.cornell.edu/pdf/1903.06048 (paper)
 
 # Interesting links
 resource for improvement heuristics for GANs
