@@ -16,6 +16,9 @@ Progressive Wasserstein GAN with gradient penalty: https://github.com/shanexn/py
 
 Official Pytorch implementation for progressive GAN (amongst others): https://github.com/facebookresearch/pytorch_GAN_zoo
 
+Repository to a paper, they use Multi-Scale Gradients (MSG) to speed up the network, especially when generating higher resulotion images (also used on CelebA) 
+https://github.com/akanimax/msg-stylegan-tf
+
 # Interesting links
 resource for improvement heuristics for GANs
  - https://github.com/soumith/ganhacks
