@@ -1,352 +1,397 @@
 import torch.nn as nn
 import torch
-from torch.nn.init import kaiming_normal_, calculate_gain
+
 import torch.nn.functional as F
 
-import os
-
-import numpy as np
-
-
-class HelpFunc(object):
-    @staticmethod
-    def process_transition(a, b):
-        """
-        Transit tensor a as tensor b's size by
-        'nearest neighbor filtering' and 'average pooling' respectively
-        which mentioned below Figure2 of the Paper https://arxiv.org/pdf/1710.10196.pdf
-        :param torch.Tensor a: is a tensor with size [batch, channel, height, width]
-        :param torch.Tensor b: similar as a
-        :return torch.Tensor :
-        """
-        a_batch, a_channel, a_height, a_width = a.size()
-        b_batch, b_channel, b_height, b_width = b.size()
-        # Drop feature maps
-        if a_channel > b_channel:
-            a = a[:, :b_channel]
-
-        if a_height > b_height:
-            assert a_height % b_height == 0 and a_width % b_width == 0
-            assert a_height / b_height == a_width / b_width
-            ks = int(a_height // b_height)
-            a = F.avg_pool2d(a, kernel_size=ks, stride=ks, padding=0, ceil_mode=False, count_include_pad=False)
-
-        if a_height < b_height:
-            assert b_height % a_height == 0 and b_width % a_width == 0
-            assert b_height / a_height == b_width / a_width
-            sf = b_height // a_height
-            a = F.upsample(a, scale_factor=sf, mode='nearest')
-
-        # Add feature maps.
-        if a_channel < b_channel:
-            z = torch.zeros((a_batch, b_channel - a_channel, b_height, b_width))
-            a = torch.cat([a, z], 1)
-        # print("a size: ", a.size())
-        return a
+import math
+from numpy import prod
 
 
-class PixelWiseNormLayer(nn.Module):
-    """
-    Mentioned in '4.2 PIXELWISE FEATURE VECTOR NORMALIZATION IN GENERATOR'
-    'Local response normalization'
-    """
+def num_flat_features(x):
+    size = x.size()[1:]  # all dimensions except the batch dimension
+    num_features = 1
+    for s in size:
+        num_features *= s
+    return num_features
+
+def miniBatchStdDev(x, sub_group_size=4):
+    size = x.size()
+    sub_group_size = min(size[0], sub_group_size)
+    if size[0] % sub_group_size != 0:
+        sub_group_size = size[0]
+    G = int(size[0] / sub_group_size)
+    if sub_group_size > 1:
+        y = x.view(-1, sub_group_size, size[1], size[2], size[3])
+        y = torch.var(y, 1)
+        y = torch.sqrt(y + 1e-8)
+        y = y.view(G, -1)
+        y = torch.mean(y, 1).view(G, 1)
+        y = y.expand(G, size[2]*size[3]).view((G, 1, 1, size[2], size[3]))
+        y = y.expand(G, sub_group_size, -1, -1, -1)
+        y = y.contiguous().view((-1, 1, size[2], size[3]))
+    else:
+        y = torch.zeros(x.size(0), 1, x.size(2), x.size(3), device=x.device)
+
+    return torch.cat([x, y], dim=1)
+
+class NormalizationLayer(nn.Module):
 
     def __init__(self):
-        super(PixelWiseNormLayer, self).__init__()
+        super(NormalizationLayer, self).__init__()
+
+    def forward(self, x, epsilon=1e-8):
+        return x * (((x**2).mean(dim=1, keepdim=True) + epsilon).rsqrt())
+
+
+def Upscale2d(x, factor=2):
+    assert isinstance(factor, int) and factor >= 1
+    if factor == 1:
+        return x
+    s = x.size()
+    x = x.view(-1, s[1], s[2], 1, s[3], 1)
+    x = x.expand(-1, s[1], s[2], factor, s[3], factor)
+    x = x.contiguous().view(-1, s[1], s[2] * factor, s[3] * factor)
+    return x
+
+
+def getLayerNormalizationFactor(x):
+    size = x.weight.size()
+    fan_in = prod(size[1:])
+
+    return math.sqrt(2.0 / fan_in)
+
+
+class ConstrainedLayer(nn.Module):
+    def __init__(self,
+                 module,
+                 lrMul=1.0):
+
+        super(ConstrainedLayer, self).__init__()
+
+        self.module = module
+        self.equalized =True
+
+        self.module.bias.data.fill_(0)
+        self.module.weight.data.normal_(0, 1)
+        self.module.weight.data /= lrMul
+        self.weight = getLayerNormalizationFactor(self.module) * lrMul
 
     def forward(self, x):
-        return x / torch.sqrt(torch.mean(x ** 2, dim=1, keepdim=True) + 1e-8)
-
-
-class EqualizedLearningRateLayer(nn.Module):
-    """
-    Mentioned in '4.1 EQUALIZED LEARNING RATE'
-    Applies equalized learning rate to the preceding layer.
-    *'To initialize all bias parameters to zero and all weights
-    according to the normal distribution with unit variance'
-    """
-
-    def __init__(self, layer):
-        super(EqualizedLearningRateLayer, self).__init__()
-        self.layer_ = layer
-
-        # He's Initializer (He et al., 2015)
-        kaiming_normal_(self.layer_.weight, a=calculate_gain('conv2d'))
-        # Cause mean is 0 after He-kaiming function
-        self.layer_norm_constant_ = (torch.mean(self.layer_.weight.data ** 2)) ** 0.5
-        self.layer_.weight.data.copy_(self.layer_.weight.data / self.layer_norm_constant_)
-
-        self.bias_ = self.layer_.bias if self.layer_.bias else None
-        self.layer_.bias = None
-
-    def forward(self, x):
-        self.layer_norm_constant_ = self.layer_norm_constant_.type(torch.cuda.FloatTensor)
-        x = self.layer_norm_constant_ * x
-        if self.bias_ is not None:
-            # x += self.bias.view(1, -1, 1, 1).expand_as(x)
-            x += self.bias.view(1, self.bias.size()[0], 1, 1)
+        x = self.module(x)
+        x *= self.weight
         return x
 
 
-class MiniBatchAverageLayer(nn.Module):
+class EqualizedConv2d(ConstrainedLayer):
+
     def __init__(self,
-                 offset=1e-8  # From the original implementation
-                              # https://github.com/tkarras/progressive_growing_of_gans/blob/master/networks.py #L135
-                 ):
-        super(MiniBatchAverageLayer, self).__init__()
-        self.offset_ = offset
+                 nChannelsPrevious,
+                 nChannels,
+                 kernelSize,
+                 padding=0,
+                 **kwargs):
+        ConstrainedLayer.__init__(self,
+                                  nn.Conv2d(nChannelsPrevious, nChannels,
+                                            kernelSize, padding=padding,
+                                            bias=True),
+                                  **kwargs)
+
+
+class EqualizedLinear(ConstrainedLayer):
+
+    def __init__(self,
+                 nChannelsPrevious,
+                 nChannels,
+                 bias=True,
+                 **kwargs):
+        ConstrainedLayer.__init__(self,
+                                  nn.Linear(nChannelsPrevious, nChannels,
+                                  bias=bias), **kwargs)
+
+
+class ConvTranspose2dBlock(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int,
+                 kernel_size: int = 4,
+                 stride: int = 2, padding: int = 1, bias=False,
+                 upsampling_factor: int = None,  # must be divisible by 2
+                 activation_function=nn.ReLU(True),
+                 batch_norm: bool = True):
+
+        super(ConvTranspose2dBlock, self).__init__()
+        if upsampling_factor:
+            # This ensures output dimension are scaled up by upsampling_factor
+            stride = upsampling_factor
+            kernel_size = 2 * upsampling_factor
+            padding = upsampling_factor // 2
+
+        self.conv_layer = nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride, padding, bias=bias)
+        self.batch_norm = nn.BatchNorm2d(out_channels) if batch_norm else None
+        self.activation = activation_function
 
     def forward(self, x):
-        # Follow Chapter3 of the Paper:
-        # Computer the standard deviation for each feature
-        # in each spatial locations to arrive at the single value
-        stddev = torch.sqrt(torch.mean((x - torch.mean(x, dim=0, keepdim=True))**2, dim=0, keepdim=True) + self.offset_)
-        inject_shape = list(x.size())[:]
-        inject_shape[1] = 1  #  Inject 1 line data for the second dim (channel dim). See Chapter3 and Table2
-        inject = torch.mean(stddev, dim=1, keepdim=True)
-        inject = inject.expand(inject_shape)
-        return torch.cat((x, inject), dim=1)
+        out = self.conv_layer(x)
+        if self.batch_norm:
+            out = self.batch_norm(out)
+        return self.activation(out)
+
+
+class Conv2dBlock(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int,
+                 kernel_size: int = 4,
+                 stride: int = 2, padding: int = 1, bias=False,
+                 downsampling_factor: int = None,  # must be divisible by 2
+                 activation_function=nn.LeakyReLU(0.2, inplace=True),  # from GAN Hacks
+                 batch_norm: bool = True):
+
+        super(Conv2dBlock, self).__init__()
+        if downsampling_factor:
+            # This ensures output dimension are scaled down by downsampling_factor
+            stride = downsampling_factor
+            kernel_size = 2 * downsampling_factor
+            padding = downsampling_factor // 2
+
+        self.conv_layer = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=bias)
+        self.batch_norm = nn.BatchNorm2d(out_channels) if batch_norm else None
+        self.activation = activation_function
+
+    def forward(self, x):
+        out = self.conv_layer(x)
+        if self.batch_norm:
+            out = self.batch_norm(out)
+        return self.activation(out)
 
 
 class Generator(nn.Module):
-    def __init__(self,
-                 resolution,  # Output resolution. Overridden based on dataset.
-                 latent_size,  # Dimensionality of the latent vectors.
-                 final_channel=3,  # Output channel size, for rgb always 3
-                 fmap_base=2 ** 13,  # Overall multiplier for the number of feature maps.
-                 fmap_decay=1.0,  # log2 feature map reduction when doubling the resolution.
-                 fmap_max=2 ** 9,  # Maximum number of feature maps in any layer.
-                 is_tanh=False
-                 ):
+    def __init__(self, latent_vector_dimension, output_image_channels, initial_layer_channels, generation_activation=None):
         super(Generator, self).__init__()
-        self.latent_size_ = latent_size
-        self.is_tanh_ = is_tanh
-        self.final_channel_ = final_channel
-        # Use (fmap_max, fmap_decay, fmap_max)
-        # to control every level's in||out channels
-        self.fmap_base_ = fmap_base
-        self.fmap_decay_ = fmap_decay
-        self.fmap_max_ = fmap_max
-        image_pyramid_ = int(np.log2(resolution))  # max level of the Image Pyramid
-        self.resolution_ = 2 ** image_pyramid_  # correct resolution
-        self.net_level_max_ = image_pyramid_ - 1  # minus 1 in order to exclude last rgb layer
+        # middle_scaling_layers = log(config.target_image_size, 2) - 3 # end layer has umsampling=2, first layer outputs 4x4
+        self.initial_layer_channels = initial_layer_channels
+        self.output_image_channels = output_image_channels
+        self.alpha = 0
+        self.activation_function = torch.nn.LeakyReLU(0.2)
 
-        self.lod_layers_ = nn.ModuleList()    # layer blocks exclude to_rgb layer
-        self.rgb_layers_ = nn.ModuleList()    # rgb layers each correspond to specific level.
 
-        for level in range(self.net_level_max_):
-            self._construct_by_level(level)
+        # init format layer
+        self.layer_channels = [initial_layer_channels]
+        self.init_format_layer(latent_vector_dimension)
 
-        self.net_level_ = self.net_level_max_  # set default net level as max level
-        self.net_status_ = "stable"            # "stable" or "fadein"
-        self.net_alpha_ = 1.0                  # the previous stage's weight
+        self.scale_layers = nn.ModuleList([])
+        self.to_rgb_layers = nn.ModuleList([EqualizedConv2d(self.initial_layer_channels, self.output_image_channels, 1)])
+        self.initial_layer = nn.ModuleList([EqualizedConv2d(self.initial_layer_channels, self.initial_layer_channels, 3, padding=1)])
 
-    @property
-    def net_config(self):
-        """
-        Return current net's config.
-        The config is used to control forward
-        The pipeline was mentioned below Figure2 of the Paper
-        """
-        return self.net_level_, self.net_status_, self.net_alpha_
+        self.normalization_layer = NormalizationLayer()
 
-    @net_config.setter
-    def net_config(self, config_list):
-        """
-        :param iterable config_list: [net_level, net_status, net_alpha]
-        :return:
-        """
-        self.net_level_, self.net_status_, self.net_alpha_ = config_list
+        self.generation_activation = generation_activation
+
+    def init_format_layer(self, latent_vector_dimension):
+        self.latent_vector_dimension = latent_vector_dimension
+        self.format_layer = EqualizedLinear(self.latent_vector_dimension, 16 * self.layer_channels[0])
+
+    def get_output_size(self):
+        side = 4 * (2**(len(self.to_rgb_layers) - 1))
+        return (side, side)  
+        
+    def add_new_layer(self, new_layer_channels):
+        previous_layer_channels = self.layer_channels[-1]
+        self.layer_channels.append(new_layer_channels)
+
+        # create new scale layer group and append to all scale layers
+        new_scale_layers_group = nn.ModuleList([
+            EqualizedConv2d(previous_layer_channels,
+                            new_layer_channels,
+                            3,
+                            padding=1),
+            EqualizedConv2d(new_layer_channels, 
+                            new_layer_channels,
+                            3, 
+                            padding=1)
+        ])
+        self.scale_layers.append(new_scale_layers_group)
+
+        # create and append new rgb layer
+        self.to_rgb_layers.append(EqualizedConv2d(  new_layer_channels,
+                                                    self.output_image_channels,
+                                                    1))
+                                                    
+                                                    
+    def set_new_alpha(self, alpha):
+        self.alpha = alpha
+    
 
     def forward(self, x):
-        """
-        The pipeline was mentioned below Figure2 of the Paper
-        """
-        if self.net_status_ == "stable":
-            cur_output_level = self.net_level_
-            for cursor in range(self.net_level_+1):
-                x = self.lod_layers_[cursor](x)
-            x = self.rgb_layers_[cur_output_level](x)
+         ## Normalize the input ?
+        x = self.normalization_layer(x)
+        x = x.view(-1, num_flat_features(x))
+        # format layer
+        x = self.activation_function(self.format_layer(x))
+        x = x.view(x.size()[0], -1, 4, 4)
 
-        elif self.net_status_ == "fadein":
-            pre_output_level = self.net_level_ - 1
-            cur_output_level = self.net_level_
-            pre_weight, cur_weight = self.net_alpha_, 1.0 - self.net_alpha_
-            output_cache = []
-            for cursor in range(self.net_level_+1):
-                x = self.lod_layers_[cursor](x)
-                if cursor == pre_output_level:
-                    output_cache.append(self.rgb_layers_[cursor](x))
-                if cursor == cur_output_level:
-                    output_cache.append(self.rgb_layers_[cursor](x))
-            x = HelpFunc.process_transition(output_cache[0], output_cache[1]) * pre_weight \
-                + output_cache[1] * cur_weight
+        x = self.normalization_layer(x)
 
-        else:
-            raise AttributeError("Please set the net_status: ['stable', 'fadein']")
+        # Scale 0 (no upsampling)
+        for conv_layer in self.initial_layer:
+            x = self.activation_function(conv_layer(x))
+            x = self.normalization_layer(x)
+
+        # Dirty, find a better way
+        if self.alpha > 0 and len(self.scale_layers) == 1:
+            y = self.to_rbg_layers[-2](x)
+            y = Upscale2d(y)
+
+        # Upper scales
+        for scale, layer_group in enumerate(self.scale_layers, 0):
+            x = Upscale2d(x)
+            for conv_layer in layer_group:
+                x = self.activation_function(conv_layer(x))
+                x = self.normalization_layer(x)
+
+            if self.alpha > 0 and scale == (len(self.scale_layers) - 2):
+                y = self.to_rgb_layers[-2](x)
+                y = Upscale2d(y)
+
+        # To RGB (no alpha parameter for now)
+        x = self.to_rgb_layers[-1](x)
+
+        # Blending with the lower resolution output when alpha > 0
+        if self.alpha > 0:
+            x = self.alpha * y + (1.0-self.alpha) * x
+
+        if self.generation_activation is not None:
+            x = self.generation_activation(x)
 
         return x
 
-    def _construct_by_level(self, cursor):
-        in_level = cursor
-        out_level = cursor + 1
-        in_channels, out_channels = map(self._get_channel_by_stage, (in_level, out_level))
-        block_type = "First" if cursor == 0 else "UpSample"
-        self._create_block(in_channels, out_channels, block_type)  # construct previous (max_level - 1) layers
-        self._create_block(out_channels, 3, "ToRGB")                # construct rgb layer for each previous level
-
-    def _create_block(self, in_channels, out_channels, block_type):
-        """
-        Create a network block
-        :param block_type:  only can be "First"||"UpSample"||"ToRGB"
-        :return:
-        """
-        block_cache = []
-        if block_type in ["First", "UpSample"]:
-            if block_type == "First":
-                block_cache.append(PixelWiseNormLayer())
-                block_cache.append(nn.Conv2d(in_channels, out_channels,
-                                             kernel_size=4, stride=1, padding=3, bias=False))
-            if block_type == "UpSample":
-                block_cache.append(nn.Upsample(scale_factor=2, mode='nearest'))
-                block_cache.append(nn.Conv2d(in_channels, out_channels,
-                                             kernel_size=3, stride=1, padding=1, bias=False))
-            block_cache.append(EqualizedLearningRateLayer(block_cache[-1]))
-            block_cache.append(nn.LeakyReLU(negative_slope=0.2))
-            block_cache.append(PixelWiseNormLayer())
-            block_cache.append(nn.Conv2d(out_channels, out_channels,
-                                         kernel_size=3, stride=1, padding=1, bias=False))
-            block_cache.append(EqualizedLearningRateLayer(block_cache[-1]))
-            block_cache.append(nn.LeakyReLU(negative_slope=0.2))
-            block_cache.append(PixelWiseNormLayer())
-            self.lod_layers_.append(nn.Sequential(*block_cache))
-        elif block_type == "ToRGB":
-            block_cache.append(nn.Conv2d(in_channels, out_channels=3,
-                                         kernel_size=1, stride=1, padding=0, bias=False))
-            block_cache.append(EqualizedLearningRateLayer(block_cache[-1]))
-            if self.is_tanh_ is True:
-                block_cache.append(nn.Tanh())
-            self.rgb_layers_.append(nn.Sequential(*block_cache))
-        else:
-            raise TypeError("'block_type' must in ['First', 'UpSample', 'ToRGB']")
-
-    def _get_channel_by_stage(self, level):
-        return min(int(self.fmap_base_ / (2.0 ** (level * self.fmap_decay_))), self.fmap_max_)
 
 
 class Discriminator(nn.Module):
-    def __init__(self,
-                 resolution,  # Output resolution. Overridden based on dataset.
-                 input_channel=3,  # input channel size, for rgb always 3
-                 fmap_base=2 ** 13,  # Overall multiplier for the number of feature maps.
-                 fmap_decay=1.0,  # log2 feature map reduction when doubling the resolution.
-                 fmap_max=2 ** 9,  # Maximum number of feature maps in any layer.
-                 is_sigmoid=False
-                 ):
+    def __init__(self, input_image_channels, decision_layer_size, initial_layer_channels):
         super(Discriminator, self).__init__()
-        self.input_channel_ = input_channel
-        self.is_sigmoid_ = is_sigmoid
-        # Use (fmap_max, fmap_decay, fmap_max)
-        # to control every level's in||out channels
-        self.fmap_base_ = fmap_base
-        self.fmap_decay_ = fmap_decay
-        self.fmap_max_ = fmap_max
-        image_pyramid_ = int(np.log2(resolution))  # max level of the Image Pyramid
-        self.resolution_ = 2 ** image_pyramid_  # correct resolution
-        self.net_level_max_ = image_pyramid_ - 1  # minus 1 in order to exclude first rgb layer
+        # Initialization paramneters
+        self.input_image_channels = input_image_channels
+        self.initial_layer_channels = initial_layer_channels
 
-        self.lod_layers_ = nn.ModuleList()  # layer blocks exclude to_rgb layer
-        self.rgb_layers_ = nn.ModuleList()  # rgb layers each correspond to specific level.
+        # Initalize the scales
+        self.layer_channels = [self.initial_layer_channels]
+        self.scale_layers = nn.ModuleList()
+        self.from_rgb_layers = nn.ModuleList()
 
-        for level in range(self.net_level_max_, 0, -1):
-            self._construct_by_level(level)
+        self.merge_layers = nn.ModuleList()
 
-        self.net_level_ = self.net_level_max_  # set default net level as max level
-        self.net_status_ = "stable"  # "stable" or "fadein"
-        self.net_alpha_ = 1.0  # the previous stage's weight
+        # Initialize the last layer
+        self.decision_layer = EqualizedLinear(self.layer_channels[0], decision_layer_size)
 
-    @property
-    def net_config(self):
-        return self.net_level_, self.net_status_, self.net_alpha_
+        # Layer 0
+        self.group_scale_zero = nn.ModuleList([
+            EqualizedConv2d(self.initial_layer_channels, self.initial_layer_channels, 3, padding=1),
+            EqualizedLinear(self.initial_layer_channels * 16, self.initial_layer_channels)
+        ])
+        self.from_rgb_layers.append(EqualizedConv2d(input_image_channels, self.initial_layer_channels, 1))
 
-    @net_config.setter
-    def net_config(self, config_list):
-        self.net_level_, self.net_status_, self.net_alpha_ = config_list
+        # # Minibatch standard deviation
+        # dim_entry_scale_0 = depthScale0
+        # if miniBatchNormalization:
+        #     dim_entry_scale_0 += 1
+
+        # self.miniBatchNormalization = miniBatchNormalization
+
+
+        # Initalize the upscaling parameters
+        self.alpha = 0
+
+        # Leaky relu activation
+        self.leaky_relu = torch.nn.LeakyReLU(0.2)
+
+    
+    
+    def add_new_layer(self, new_scale = None):
+        depth_last_scale = self.layer_channels[-1]
+        depth_new_scale = new_scale if new_scale else depth_last_scale * 2
+        self.layer_channels.append(depth_new_scale)
+
+        # create new scale layer group and append to all scale layers
+        new_scale_layers_group = nn.ModuleList([
+            EqualizedConv2d(depth_new_scale,
+                            depth_new_scale,
+                            3,
+                            padding=1),
+            EqualizedConv2d(depth_new_scale, 
+                            depth_last_scale,
+                            3, 
+                            padding=1)
+        ])
+        self.scale_layers.append(new_scale_layers_group)
+
+        # create and append new rgb layer
+        self.to_rgb_layers.append(EqualizedConv2d(  self.input_image_channels,
+                                                    depth_new_scale,
+                                                    1))
+                                                    
+
+    def set_new_alpha(self, alpha):
+        r"""
+        Update the value of the merging factor alpha
+
+        Args:
+
+            - alpha (float): merging factor, must be in [0, 1]
+        """
+
+        if alpha < 0 or alpha > 1:
+            raise ValueError("alpha must be in [0,1]")
+
+        if not self.from_rgb_layers:
+            raise AttributeError("Can't set an alpha layer if only the scale 0"
+                                 "is defined")
+
+        self.alpha = alpha
+
 
     def forward(self, x):
-        if self.net_status_ == "stable":
-            cur_input_level = self.net_level_max_ - self.net_level_ - 1
-            x = self.rgb_layers_[cur_input_level](x)
-            for cursor in range(cur_input_level, self.net_level_max_):
-                x = self.lod_layers_[cursor](x)
+        # Alpha blending
+        if self.alpha > 0 and len(self.from_rgb_layers) > 1:
+            y = F.avg_pool2d(x, (2, 2))
+            y = self.leaky_relu(self.from_rgb_layers[- 2](y))
 
-        elif self.net_status_ == "fadein":
-            pre_input_level = self.net_level_max_ - self.net_level_
-            cur_input_level = self.net_level_max_ - self.net_level_ - 1
-            pre_weight, cur_weight = self.net_alpha_, 1.0 - self.net_alpha_
-            x_pre_cache = self.rgb_layers_[pre_input_level](x)
-            x_cur_cache = self.rgb_layers_[cur_input_level](x)
-            x_cur_cache = self.lod_layers_[cur_input_level](x_cur_cache)
-            x = HelpFunc.process_transition(x_pre_cache, x_cur_cache) * pre_weight + x_cur_cache * cur_weight
+        # From RGB layer
+        x = self.leaky_relu(self.from_rgb_layers[-1](x))
 
-            for cursor in range(cur_input_level + 1, self.net_level_max_):
-                x = self.lod_layers_[cursor](x)
+        # Caution: we must explore the layers group in reverse order !
+        # Explore all scales before 0
+        merge_layer = self.alpha > 0 and len(self.scale_layers) > 1
 
-        else:
-            raise AttributeError("Please set the net_status: ['stable', 'fadein']")
+        for group_layer in reversed(self.scale_layers):
 
-        return x
+            for layer in group_layer:
+                x = self.leaky_relu(layer(x))
 
-    def _construct_by_level(self, cursor):
-        in_level = cursor
-        out_level = cursor - 1
-        in_channels, out_channels = map(self._get_channel_by_stage, (in_level, out_level))
-        block_type = "Minibatch" if cursor == 1 else "DownSample"
-        self._create_block(in_channels, out_channels, block_type)  # construct (max_level-1) layers(exclude rgb layer)
-        self._create_block(3, in_channels, "FromRGB")  # construct rgb layer for each previous level
+            x = nn.AvgPool2d((2, 2))(x)
 
-    def _create_block(self, in_channels, out_channels, block_type):
-        """
-        Create a network block
-        :param block_type:  only can be "Minibatch"||"DownSample"||"FromRGB"
-        :return:
-        """
-        block_cache = []
-        if block_type == "DownSample":
-            block_cache.append(nn.Conv2d(in_channels, out_channels,
-                                         kernel_size=3, stride=1, padding=1, bias=False))
-            block_cache.append(EqualizedLearningRateLayer(block_cache[-1]))
-            block_cache.append(nn.LeakyReLU(negative_slope=0.2))
-            block_cache.append(nn.Conv2d(out_channels, out_channels,
-                                         kernel_size=3, stride=1, padding=1, bias=False))
-            block_cache.append(EqualizedLearningRateLayer(block_cache[-1]))
-            block_cache.append(nn.LeakyReLU(negative_slope=0.2))
-            block_cache.append(nn.AvgPool2d(kernel_size=2, stride=2, ceil_mode=False, count_include_pad=False))
-            self.lod_layers_.append(nn.Sequential(*block_cache))
-        elif block_type == "FromRGB":
-            block_cache.append(nn.Conv2d(in_channels=3, out_channels=out_channels,
-                                         kernel_size=1, stride=1, padding=0, bias=False))
-            block_cache.append(EqualizedLearningRateLayer(block_cache[-1]))
-            block_cache.append(nn.LeakyReLU(negative_slope=0.2))
-            self.rgb_layers_.append(nn.Sequential(*block_cache))
-        elif block_type == "Minibatch":
-            block_cache.append(MiniBatchAverageLayer())
-            block_cache.append(nn.Conv2d(in_channels + 1, out_channels,
-                                         kernel_size=3, stride=1, padding=1, bias=False))
-            block_cache.append(EqualizedLearningRateLayer(block_cache[-1]))
-            block_cache.append(nn.LeakyReLU(negative_slope=0.2))
-            block_cache.append(nn.Conv2d(out_channels, out_channels,
-                                         kernel_size=4, stride=1, padding=0, bias=False))
-            block_cache.append(EqualizedLearningRateLayer(block_cache[-1]))
-            block_cache.append(nn.LeakyReLU(negative_slope=0.2))
-            block_cache.append(nn.Conv2d(out_channels, out_channels=1,
-                                         kernel_size=1, stride=1, padding=0, bias=False))
-            block_cache.append(EqualizedLearningRateLayer(block_cache[-1]))
-            if self.is_sigmoid_ is True:
-                block_cache.append(nn.Sigmoid())
-            self.lod_layers_.append(nn.Sequential(*block_cache))
-        else:
-            raise TypeError("'block_type' must in ['Minibatch', 'DownSample', 'FromRGB']")
+            if merge_layer:
+                merge_layer = False
+                x = self.alpha * y + (1-self.alpha) * x
 
-    def _get_channel_by_stage(self, level):
-        return min(int(self.fmap_base_ / (2.0 ** (level * self.fmap_decay_))), self.fmap_max_)
+
+        # Now the scale 0
+
+        # # Minibatch standard deviation
+        # if self.miniBatchNormalization:
+        #     x = miniBatchStdDev(x)
+
+        x = self.leaky_relu(self.group_scale_zero[0](x))
+
+        x = x.view(-1, num_flat_features(x))
+        x = self.leaky_relu(self.group_scale_zero[1](x))
+
+        out = self.decision_layer(x)
+
+        return out
+
+
+# custom weights initialization called on netG and netD
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname == 'Conv2d' or classname == 'ConvTranspose2d':
+        torch.nn.init.normal_(m.weight, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        torch.nn.init.normal_(m.weight, 1.0, 0.02)
+        torch.nn.init.zeros_(m.bias)
