@@ -213,8 +213,21 @@ class ProgressiveGAN:
 
 
     def add_new_layer(self, new_layer_channels):
+        # In the repo, they just use the "original" version of the net
+        self.generator = self.generator.to('cpu')
+        self.discriminator = self.discriminator.to('cpu')
+
         self.generator.add_new_layer(new_layer_channels)
         self.discriminator.add_new_layer(new_layer_channels)
+
+        self.generator = self.generator.to(self.device)
+        self.discriminator = self.discriminator.to(self.device)
+
+        self.optimizer_generator = self.get_optimizer(self.generator)
+        self.optimizer_discriminator = self.get_optimizer(self.discriminator)
+
+        self.optimizer_discriminator.zero_grad()
+        self.optimizer_generator.zero_grad()
     
     def get_optimizer(self, model):
         return optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
@@ -252,7 +265,8 @@ class Trainer:
         self.config = config
 
         self.model_config = {}
-        self.model_config['max_iter_at_scale'] = [48000, 96000, 96000,96000, 96000, 96000, 96000, 96000, 200000]
+        #self.model_config['max_iter_at_scale'] = [48000, 96000, 96000, 96000, 96000, 96000, 96000, 96000, 200000]
+        self.model_config['max_iter_at_scale'] = [10, 10, 10, 10, 10, 10, 10, 10, 10]
 
         # alpha config
         self.model_config['alpha_jump_mode'] = "linear"
@@ -422,7 +436,7 @@ class Trainer:
             if scale == n_scales - 1:
                 break
 
-            self.model.add_scale(self.model_config['depth_scales'][scale + 1])
+            self.model.add_new_layer(self.model_config['depth_scales'][scale + 1])
 
         self.start_scale = n_scales
         self.start_iter = self.model_config['max_iter_at_scale'][-1]

@@ -209,9 +209,9 @@ class Generator(nn.Module):
         self.scale_layers.append(new_scale_layers_group)
 
         # create and append new rgb layer
-        self.to_rgb_layers.append(EqualizedConv2d(  new_layer_channels,
-                                                    self.output_image_channels,
-                                                    1))
+        self.to_rgb_layers.append(EqualizedConv2d(new_layer_channels,
+                                                  self.output_image_channels,
+                                                  1))
                                                     
                                                     
     def set_new_alpha(self, alpha):
@@ -322,7 +322,7 @@ class Discriminator(nn.Module):
         self.scale_layers.append(new_scale_layers_group)
 
         # create and append new rgb layer
-        self.to_rgb_layers.append(EqualizedConv2d(  self.input_image_channels,
+        self.from_rgb_layers.append(EqualizedConv2d(  self.input_image_channels,
                                                     depth_new_scale,
                                                     1))
                                                     
