@@ -24,7 +24,7 @@ from data_loading import AttribDataset, ImageFeatureFolder
 
 from helper.arg_parser import ArgParser
 from helper.store import Store
-from helper.criterions import WGANGP_loss, WGANGP_gradient_penalty, Epsilon_loss, ACGANCriterion, MultiLabelClassificationLoss
+from helper.criterions import WGANGP_loss, WGANGP_gradient_penalty, Epsilon_loss, ACGANCriterion
 from helper.checks import isinf, isnan, finite_check
 from helper.numpy import NumpyFlip, NumpyResize, NumpyToTensor
 
@@ -37,6 +37,7 @@ class ProgressiveGAN:
         self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
 
         self.classification_criterion = ACGANCriterion
+        self.classification_loss = nn.BCELoss()
         self.noise_vector_dim = 512
         self.category_vector_dim = 40  # self.classification_criterion.get_input_dim()
         self.latent_vector_dimension = self.noise_vector_dim  # + self.category_vector_dim
@@ -100,6 +101,8 @@ class ProgressiveGAN:
     def train_on_batch(self, input_batch, labels):
         input_batch = input_batch.to(self.device)
         batch_size = input_batch.size()[0]
+        labels_zero_one = labels.clone().detach() 
+        labels_zero_one[labels_zero_one == -1] = 0
 
         ####### TRAIN DISCRIMINATOR ##########
         self.optimizer_discriminator.zero_grad()
@@ -111,11 +114,9 @@ class ProgressiveGAN:
 
         #classification_loss_d = self.classification_criterion.loss(prediction_real_data, labels) * self.config['weight_condition_d']
         # classification_loss_d.backward(retain_graph=True)
-        classification_loss = MultiLabelClassificationLoss(prediction_fake_classes, labels) 
-        classification_loss.backward(retain_graph=True)
 
-        classification_loss_2 = MultiLabelClassificationLoss(prediction_real_labels, labels) # fix bug so that we can add them , probably instantiate loss instead of fucntion OR error is because real_labels gets changed in loss
-        classification_loss_2.backward(retain_graph=True)
+        classification_loss = self.classification_loss(prediction_real_labels, labels_zero_one) 
+        classification_loss.backward(retain_graph=True)
 
         discriminator_loss = WGANGP_loss(prediction_fake_data, prediction_real_data)
 
@@ -137,7 +138,7 @@ class ProgressiveGAN:
 
         #classification_loss_g = self.classification_criterion.loss(prediction_fake_data, target_cat_noise) * self.config['weight_condition_g']
         # classification_loss_g.backward(retain_graph=True)
-        classification_loss = MultiLabelClassificationLoss(prediction_fake_classes, labels)
+        classification_loss = self.classification_loss(prediction_fake_classes, labels_zero_one)
         classification_loss.backward(retain_graph=True)
         generator_loss = WGANGP_loss(prediction_fake_data)
         generator_loss.backward()
@@ -193,9 +194,9 @@ class ProgressiveGAN:
         self.discriminator.set_new_alpha(new_alpha)
         self.config['alpha'] = new_alpha
 
-    def generate_image(self, number_of_images):
-        input = torch.randn(number_of_images, self.latent_vector_dimension).to(self.device)
-        return self.generator(input).detach().cpu()
+    def generate_image(self, number_of_images, labels):
+        latent_vector = torch.randn(number_of_images, self.latent_vector_dimension).to(self.device)
+        return self.generator(latent_vector, labels).detach().cpu()
 
 
 class Trainer:
@@ -424,7 +425,7 @@ class Trainer:
 
             # Save Image and Model Checkpoint
             if i % config.sample_interval == 0:
-                self.generate_image(scale, i)
+                self.generate_image(scale, i, labels)
                 self.model.save_checkpoint()
                 self.write_loss_to_file(scale)
 
@@ -433,8 +434,8 @@ class Trainer:
 
         return True
 
-    def generate_image(self, scale, iteration):
-        image = self.model.generate_image(self.model_config['mini_batch_size'])
+    def generate_image(self, scale, iteration, labels):
+        image = self.model.generate_image(self.model_config['mini_batch_size'], labels)
         vutils.save_image(image.data[:self.model_config['mini_batch_size']], f'{self.config.result_dir}/{self.config.checkpoint_prefix}/scale' + str(
             scale) + '_iter' + str(iteration) + '.png', normalize=True)
 
