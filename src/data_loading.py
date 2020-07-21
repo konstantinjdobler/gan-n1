@@ -5,10 +5,28 @@ import torch
 
 import os
 
+import json
+
 import numpy as np
 
 from copy import deepcopy
 from PIL import Image
+
+class ImageFeatureFolder(dset.ImageFolder):
+    def __init__(self, image_root, attribute_file, transform):
+        super(ImageFeatureFolder, self).__init__(
+            root=image_root, transform=transform)
+
+        with open(attribute_file, 'r') as f:
+            data = f.read()
+        data = data.strip().split('\n')
+        self.attrs = torch.FloatTensor(
+            [list(map(float, line.split()[1:])) for line in data[2:]])
+
+    def __getitem__(self, index):
+        img, _ = super().__getitem__(index)
+
+        return img, self.attrs[index]
 
 
 def pil_loader(path):
@@ -87,23 +105,6 @@ def buildKeyOrder(shiftAttrib,
                     MAX_VAL_EQUALIZATION, n / float(value + 1.0))
 
     return output
-
-# class ImageFeatureFolder(dset.ImageFolder):
-#     def __init__(self, image_root, landmark_file, transform):
-#         super(ImageFeatureFolder, self).__init__(
-#             root=image_root, transform=transform)
-
-#         with open(landmark_file, 'r') as f:
-#             data = f.read()
-#         data = data.strip().split('\n')
-#         self.attrs = torch.FloatTensor(
-#             [list(map(float, line.split()[1:])) for line in data[2:]])
-
-#     def __getitem__(self, index):
-#         img, _ = super().__getitem__(index)
-
-#         return img, self.attrs[index]
-
 
 
 class AttribDataset(data.Dataset):

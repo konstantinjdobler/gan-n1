@@ -42,6 +42,9 @@ class ArgParser:
         self.parser.add_argument('--no-hd-crop', dest='hd_crop', action='store_false')
         self.parser.add_argument('--init-depth-scale', type=int, default=512)
 
+        self.parser.add_argument('--checkpoint', type=str, default=None)
+
+
         self.parser.set_defaults(save_checkpoints=False, random_sample=True, label_flipping=True,
                             label_smoothing=True, print_loss=False, show_loss_plot=False, fixed_noise_sample=False, hd_crop=True)
 
