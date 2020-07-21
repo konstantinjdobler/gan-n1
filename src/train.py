@@ -101,7 +101,7 @@ class ProgressiveGAN:
     def train_on_batch(self, input_batch, labels):
         input_batch = input_batch.to(self.device)
         batch_size = input_batch.size()[0]
-        labels_zero_one = labels.clone().detach() 
+        labels_zero_one = labels.clone().detach()
         labels_zero_one[labels_zero_one == -1] = 0
 
         ####### TRAIN DISCRIMINATOR ##########
@@ -115,10 +115,11 @@ class ProgressiveGAN:
         #classification_loss_d = self.classification_criterion.loss(prediction_real_data, labels) * self.config['weight_condition_d']
         # classification_loss_d.backward(retain_graph=True)
 
-        classification_loss = self.classification_loss(prediction_real_labels, labels_zero_one) 
+        classification_loss = self.classification_loss(prediction_real_labels, labels_zero_one)
         classification_loss.backward(retain_graph=True)
 
-        discriminator_loss = WGANGP_loss(prediction_fake_data, prediction_real_data)
+        discriminator_loss = WGANGP_loss(prediction_fake_data, should_be_real=False) + \
+            WGANGP_loss(prediction_real_data, should_be_real=True)
 
         WGANGP_gradient_penalty(input_batch, generated_fake_data, self.discriminator, self.config['lambda_gp'])
         discriminator_loss += Epsilon_loss(prediction_real_data, self.config['epsilon_d'])
@@ -140,7 +141,7 @@ class ProgressiveGAN:
         # classification_loss_g.backward(retain_graph=True)
         classification_loss = self.classification_loss(prediction_fake_classes, labels_zero_one)
         classification_loss.backward(retain_graph=True)
-        generator_loss = WGANGP_loss(prediction_fake_data)
+        generator_loss = WGANGP_loss(prediction_fake_data, should_be_real=True)
         generator_loss.backward()
 
         finite_check(self.generator.parameters())

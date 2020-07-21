@@ -91,7 +91,7 @@ class EqualizedLinear(ConstrainedLayer):
 
 
 class Generator(nn.Module):
-    def __init__(self, latent_vector_dimension, output_image_channels, initial_layer_channels, num_classes=40, generation_activation=None):
+    def __init__(self, latent_vector_dimension, output_image_channels, initial_layer_channels, num_classes=40, generation_activation=nn.Tanh()):
         super(Generator, self).__init__()
         # middle_scaling_layers = log(config.target_image_size, 2) - 3 # end layer has umsampling=2, first layer outputs 4x4
         self.initial_layer_channels = initial_layer_channels

@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from copy import deepcopy
 import numpy as np
 
+
 def WGANGP_gradient_penalty(input, fake, discriminator, weight, backward=True):
     batchSize = input.size(0)
     alpha = torch.rand(batchSize, 1)
@@ -31,20 +32,29 @@ def WGANGP_gradient_penalty(input, fake, discriminator, weight, backward=True):
 
     return gradient_penalty.item()
 
-def WGANGP_loss(prediction_fake_data, prediction_real_data=None):
-        fake_data_sum = prediction_fake_data[:, 0].sum()
-        if prediction_real_data is not None:
-            real_data_sum = prediction_real_data[:, 0].sum()
-            return fake_data_sum - real_data_sum
-        else:
-            return -fake_data_sum
+
+def WGANGP_loss1(prediction_fake_data, prediction_real_data=None):
+    fake_data_sum = prediction_fake_data[:, 0].sum()
+    if prediction_real_data is not None:
+        real_data_sum = prediction_real_data[:, 0].sum()
+        return fake_data_sum - real_data_sum
+    else:
+        return -fake_data_sum
+
+
+def WGANGP_loss(discriminator_output, should_be_real: bool):
+    discriminator_output_sum = discriminator_output[:, 0].sum()
+    if should_be_real:
+        return -discriminator_output_sum
+    else:
+        return discriminator_output_sum
+
 
 def Epsilon_loss(prediction_real_data, epsilon_d):
     if epsilon_d > 0:
         return (prediction_real_data[:, 0] ** 2).sum() * epsilon_d
     else:
         return 0
-
 
 
 class ACGANCriterion:
@@ -63,7 +73,7 @@ class ACGANCriterion:
             ACGANCriterion.key_order[order] = key
             ACGANCriterion.attributes_size[order] = len(attrib_keys_order[key]["values"])
             ACGANCriterion.labels_order[key] = {index: label for label, index in
-                                     enumerate(attrib_keys_order[key]["values"])}
+                                                enumerate(attrib_keys_order[key]["values"])}
 
         ACGANCriterion.label_weights = torch.tensor(
             [1.0 for x in range(ACGANCriterion.get_input_dim())])
@@ -121,7 +131,7 @@ class ACGANCriterion:
         #     random_labels = [random.choice([-1, 1]) for __ in range(ACGANCriterion.number_of_attributes)]
         #     y = torch.tensor(random_labels).view(size_batch)
         #     input_latent.append(y)
-        
+
         for i in range(ACGANCriterion.number_of_attributes):
             C = ACGANCriterion.attributes_size[i]
             v = np.random.randint(0, C, size_batch)
