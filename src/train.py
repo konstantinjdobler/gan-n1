@@ -19,27 +19,28 @@ import math
 
 import torch.nn.functional as F
 
-from architecture_pgan import Generator, Discriminator, weights_init
-from data_loading import AttribDataset
+from architecture_pgan import Generator, Discriminator
+from data_loading import AttribDataset, ImageFeatureFolder
 
 from helper.arg_parser import ArgParser
 from helper.store import Store
-from helper.criterions import WGANGP_loss, WGANGP_gradient_penalty, Epsilon_loss, ACGANCriterion
+from helper.criterions import WGANGP_loss, WGANGP_gradient_penalty, Epsilon_loss, ACGANCriterion, MultiLabelClassificationLoss
 from helper.checks import isinf, isnan, finite_check
 from helper.numpy import NumpyFlip, NumpyResize, NumpyToTensor
 
 # beta1 is a hyperparameter, suggestion from hack repo is 0.5
-#betas = (0.5, 0.99)  # adam optimizer beta1, beta2
+# betas = (0.5, 0.99)  # adam optimizer beta1, beta2
+
 
 class ProgressiveGAN:
     def __init__(self, config, checkpoint_path=None):
         self.device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
-        
+
         self.classification_criterion = ACGANCriterion
         self.noise_vector_dim = 512
-        self.category_vector_dim = 40 #self.classification_criterion.get_input_dim()
-        self.latent_vector_dimension = self.noise_vector_dim #+ self.category_vector_dim
-        self.image_channels = 3 #RGB
+        self.category_vector_dim = 40  # self.classification_criterion.get_input_dim()
+        self.latent_vector_dimension = self.noise_vector_dim  # + self.category_vector_dim
+        self.image_channels = 3  # RGB
         self.learning_rate = config['learning_rate']
 
         self.config = config
@@ -49,15 +50,17 @@ class ProgressiveGAN:
         self.lossG = 0
 
         self.loss_history = []
-        
+
         self.num_of_scale_iterations = 0
 
-        self.generator = Generator(output_image_channels = self.image_channels, latent_vector_dimension=self.latent_vector_dimension, initial_layer_channels=config['scaling_layer_channels'][0]).to(self.device)
-        self.discriminator = Discriminator(input_image_channels = self.image_channels, decision_layer_size=1, initial_layer_channels=config['scaling_layer_channels'][0]).to(self.device)
-        
+        self.generator = Generator(output_image_channels=self.image_channels, latent_vector_dimension=self.latent_vector_dimension,
+                                   initial_layer_channels=config['scaling_layer_channels'][0]).to(self.device)
+        self.discriminator = Discriminator(input_image_channels=self.image_channels, decision_layer_size=1,
+                                           initial_layer_channels=config['scaling_layer_channels'][0]).to(self.device)
+
         self.optimizer_generator = self.get_optimizer(self.generator)
         self.optimizer_discriminator = self.get_optimizer(self.discriminator)
-        
+
         # If path is give, load states and overwrite components with the loaded state
         if checkpoint_path:
             self.load_checkpoint(checkpoint_path)
@@ -85,55 +88,63 @@ class ProgressiveGAN:
 
     def save_checkpoint(self):
         checkpoint = {'scaleIteration': self.num_of_scale_iterations,
-                     'config': self.config,
-                     'generatorState': self.generator.state_dict(),
-                     'discriminatorState': self.discriminator.state_dict(),
-                     'generatorOptimizer': self.optimizer_generator.state_dict(),
-                     'discriminatorOptimizer': self.optimizer_discriminator.state_dict()}
+                      'config': self.config,
+                      'generatorState': self.generator.state_dict(),
+                      'discriminatorState': self.discriminator.state_dict(),
+                      'generatorOptimizer': self.optimizer_generator.state_dict(),
+                      'discriminatorOptimizer': self.optimizer_discriminator.state_dict()}
 
-        Store.save(checkpoint, f"{self.config['result_dir']}/{self.config['checkpoint_prefix']}/", self.num_of_scale_iterations)
-        
+        Store.save(
+            checkpoint, f"{self.config['result_dir']}/{self.config['checkpoint_prefix']}/", self.num_of_scale_iterations)
 
     def train_on_batch(self, input_batch, labels):
         input_batch = input_batch.to(self.device)
         batch_size = input_batch.size()[0]
+
+        ####### TRAIN DISCRIMINATOR ##########
         self.optimizer_discriminator.zero_grad()
-
-
-        prediction_real_data = self.discriminator(input_batch)
+        prediction_real_data, prediction_real_labels = self.discriminator(input_batch)
         latent_vector = torch.randn(batch_size, self.latent_vector_dimension).to(self.device)
         #latent_vector, target_cat_noise = self.build_noise_data(batch_size)
-
-        generated_fake_data = self.generator(latent_vector).detach()
-        prediction_fake_data = self.discriminator(generated_fake_data)
+        generated_fake_data = self.generator(latent_vector, labels).detach()
+        prediction_fake_data, prediction_fake_classes = self.discriminator(generated_fake_data)
 
         #classification_loss_d = self.classification_criterion.loss(prediction_real_data, labels) * self.config['weight_condition_d']
-        #classification_loss_d.backward(retain_graph=True)
+        # classification_loss_d.backward(retain_graph=True)
+        classification_loss = MultiLabelClassificationLoss(prediction_fake_classes, labels) 
+        classification_loss.backward(retain_graph=True)
+
+        classification_loss_2 = MultiLabelClassificationLoss(prediction_real_labels, labels) # fix bug so that we can add them , probably instantiate loss instead of fucntion OR error is because real_labels gets changed in loss
+        classification_loss_2.backward(retain_graph=True)
 
         discriminator_loss = WGANGP_loss(prediction_fake_data, prediction_real_data)
-        
+
         WGANGP_gradient_penalty(input_batch, generated_fake_data, self.discriminator, self.config['lambda_gp'])
         discriminator_loss += Epsilon_loss(prediction_real_data, self.config['epsilon_d'])
 
-        discriminator_loss.backward(retain_graph=True)
+        discriminator_loss.backward()
         finite_check(self.discriminator.parameters())
         self.optimizer_discriminator.step()
 
+        ########## TRAIN GENERATOR #########
         self.optimizer_discriminator.zero_grad()
         self.optimizer_generator.zero_grad()
 
-        latent_vector   = torch.randn(batch_size, self.latent_vector_dimension).to(self.device)
+        latent_vector = torch.randn(batch_size, self.latent_vector_dimension).to(self.device)
         #latent_vector, target_cat_noise = self.build_noise_data(batch_size)
-        generated_fake_data = self.generator(latent_vector)
-        prediction_fake_data = self.discriminator(generated_fake_data)
+        generated_fake_data = self.generator(latent_vector, labels)
+        prediction_fake_data, prediction_fake_classes = self.discriminator(generated_fake_data)
 
         #classification_loss_g = self.classification_criterion.loss(prediction_fake_data, target_cat_noise) * self.config['weight_condition_g']
-        #classification_loss_g.backward(retain_graph=True)
-
+        # classification_loss_g.backward(retain_graph=True)
+        classification_loss = MultiLabelClassificationLoss(prediction_fake_classes, labels)
+        classification_loss.backward(retain_graph=True)
         generator_loss = WGANGP_loss(prediction_fake_data)
-        generator_loss.backward(retain_graph=True)
+        generator_loss.backward()
+
         finite_check(self.generator.parameters())
         self.optimizer_generator.step()
+
         self.lossD = discriminator_loss
         self.lossG = generator_loss
 
@@ -154,10 +165,10 @@ class ProgressiveGAN:
         self.discriminator.add_new_layer(new_layer_channels)
         self.num_of_scale_iterations += 1
         self.move_to_device()
-    
+
     def get_optimizer(self, model):
         return optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
-                        betas=[0, 0.99], lr=self.learning_rate)
+                          betas=[0, 0.99], lr=self.learning_rate)
 
     def move_to_device(self):
         r"""
@@ -224,20 +235,19 @@ class Trainer:
         self.model_config["checkpoint_prefix"] = config.checkpoint_prefix
 
         self.update_alpha_jumps(self.model_config['alpha_n_jumps'], self.model_config['alpha_size_jumps'])
-        
+
         self.scale_sanity_check()
-        
+
         self.init_model()
 
     def init_model(self):
         self.model = ProgressiveGAN(self.model_config, self.config.checkpoint)
 
-
     def scale_sanity_check(self):
         number_scaling_layers = min(len(self.model_config['scaling_layer_channels']),
-                    len(self.model_config['max_iter_at_scale']),
-                    len(self.model_config['iter_alpha_jump']),
-                    len(self.model_config['alpha_jump_vals']))
+                                    len(self.model_config['max_iter_at_scale']),
+                                    len(self.model_config['iter_alpha_jump']),
+                                    len(self.model_config['alpha_jump_vals']))
 
         self.model_config['scaling_layer_channels'] = self.model_config['scaling_layer_channels'][:number_scaling_layers]
         self.model_config['max_iter_at_scale'] = self.model_config['max_iter_at_scale'][:number_scaling_layers]
@@ -250,7 +260,6 @@ class Trainer:
                 self.model_config['size_scales'][-1] * 2)
 
         self.model_config['number_scaling_layers'] = number_scaling_layers
-
 
     def update_alpha_jumps(self, n_jump_scale, size_jump_scale):
         number_scaling_layers = min(len(n_jump_scale), len(size_jump_scale))
@@ -296,7 +305,6 @@ class Trainer:
 
         return input_real
 
-
     def update_dataset_for_scale(self, scale):
         pass
         # self.model_config['mini_batch_size'] = get_min_occurence(
@@ -310,10 +318,9 @@ class Trainer:
         #         print(self.configScheduler[scale])
         #         self.model.updateConfig(self.configScheduler[scale])
 
-
     def get_db_loader(self, scale):
         dataset = self.get_dataset(scale)
-        return torch.utils.data.DataLoader(dataset, batch_size = self.model_config['mini_batch_size'], shuffle=True, num_workers=self.config.workers)
+        return torch.utils.data.DataLoader(dataset, batch_size=self.model_config['mini_batch_size'], shuffle=True, num_workers=self.config.workers)
 
     def get_dataset(self, scale_iteration, size=None):
         if size is None:
@@ -322,18 +329,22 @@ class Trainer:
         scaled_image_resolution = 4 * 2**scale_iteration
         print("size", size)
         transform_list = [NumpyResize(size),
-                        NumpyToTensor(),
-                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+                          NumpyToTensor(),
+                          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
 
         transform = transforms.Compose(transform_list)
 
-        data_set = AttribDataset(self.path_db, #+ f'/{scaled_image_resolution}',
-                            transform=transform,
-                            attribDictPath=self.config.condition_file,
-                            specificAttrib=None,
-                            mimicImageFolder=False)
+        # TODO: actiavte multi resolution image dataset when you have it on your computer
+        data_set = ImageFeatureFolder(image_root=self.path_db,
+                                      attribute_file=self.config.condition_file, transform=transform)
 
-        ACGANCriterion.set_key_order(data_set.getKeyOrders(), self.model.device)
+        # data_set = AttribDataset(self.path_db, #+ f'/{scaled_image_resolution}',
+        #                     transform=transform,
+        #                     attribDictPath=self.config.condition_file,
+        #                     specificAttrib=None,
+        #                     mimicImageFolder=False)
+
+        # ACGANCriterion.set_key_order(data_set.getKeyOrders(), self.model.device)
         return data_set
 
     def train(self):
@@ -360,8 +371,8 @@ class Trainer:
 
                 self.index_jump_alpha = shift_alpha
                 status = self.train_on_epoch(db_loader, scale,
-                                        shift_iter=shift_iter,
-                                        max_iter=self.model_config['max_iter_at_scale'][scale])
+                                             shift_iter=shift_iter,
+                                             max_iter=self.model_config['max_iter_at_scale'][scale])
 
                 if not status:
                     return False
@@ -370,7 +381,7 @@ class Trainer:
                 while shift_alpha < len(self.model_config['iter_alpha_jump'][scale]) and \
                         self.model_config['iter_alpha_jump'][scale][shift_alpha] < shift_iter:
                     shift_alpha += 1
-            
+
             if scale == number_scaling_layers - 1:
                 break
 
@@ -381,16 +392,15 @@ class Trainer:
         return True
 
     def train_on_epoch(self,
-                 dbLoader,
-                 scale,
-                 shift_iter=0,
-                 max_iter=-1):
+                       dbLoader,
+                       scale,
+                       shift_iter=0,
+                       max_iter=-1):
         i = shift_iter
 
-        for item, data in enumerate(dbLoader, 0):
+        for item, (data, labels) in enumerate(dbLoader, 0):
 
-            inputs_real = data[0]
-            labels = data[1].to(self.model.device)
+            inputs_real, labels = data.to(self.model.device), labels.to(self.model.device)
 
             if inputs_real.size()[0] < self.model_config['mini_batch_size']:
                 continue
@@ -409,7 +419,8 @@ class Trainer:
 
             if i % 100 == 0:
                 print("Iteration: ", i, " Alpha: ", self.model.config['alpha'])
-                print("Generator Loss: ", str(self.model.lossG.item()), " Discrimnator Loss: ", str(self.model.lossD.item()))
+                print("Generator Loss: ", str(self.model.lossG.item()),
+                      " Discrimnator Loss: ", str(self.model.lossD.item()))
 
             # Save Image and Model Checkpoint
             if i % config.sample_interval == 0:
@@ -424,12 +435,13 @@ class Trainer:
 
     def generate_image(self, scale, iteration):
         image = self.model.generate_image(self.model_config['mini_batch_size'])
-        vutils.save_image(image.data[:self.model_config['mini_batch_size']], f'{self.config.result_dir}/{self.config.checkpoint_prefix}/scale' + str(scale) + '_iter' + str(iteration) + '.png', normalize=True)
-
+        vutils.save_image(image.data[:self.model_config['mini_batch_size']], f'{self.config.result_dir}/{self.config.checkpoint_prefix}/scale' + str(
+            scale) + '_iter' + str(iteration) + '.png', normalize=True)
 
     def write_loss_to_file(self, scale):
         with open(f'{self.config.result_dir}/{self.config.checkpoint_prefix}/losses' + str(scale) + '.txt', "a") as loss_file:
-            loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n') for loss_entry in self.model.loss_history))
+            loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n')
+                                  for loss_entry in self.model.loss_history))
             self.model.loss_history = []
 
     def add_new_scales(self, config_new_scales):
@@ -480,6 +492,6 @@ if __name__ == '__main__':
     # print("Starting Training")
     # trainer = Trainer(config)
     # trainer.train(dataloader)
-    
+
     trainer = Trainer(config)
     trainer.train()

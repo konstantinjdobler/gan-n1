@@ -14,6 +14,7 @@ def num_flat_features(x):
         num_features *= s
     return num_features
 
+
 class NormalizationLayer(nn.Module):
 
     def __init__(self):
@@ -49,7 +50,7 @@ class ConstrainedLayer(nn.Module):
         super(ConstrainedLayer, self).__init__()
 
         self.module = module
-        self.equalized =True
+        self.equalized = True
 
         self.module.bias.data.fill_(0)
         self.module.weight.data.normal_(0, 1)
@@ -86,11 +87,11 @@ class EqualizedLinear(ConstrainedLayer):
                  **kwargs):
         ConstrainedLayer.__init__(self,
                                   nn.Linear(nChannelsPrevious, nChannels,
-                                  bias=bias), **kwargs)
+                                            bias=bias), **kwargs)
 
 
 class Generator(nn.Module):
-    def __init__(self, latent_vector_dimension, output_image_channels, initial_layer_channels, generation_activation=None):
+    def __init__(self, latent_vector_dimension, output_image_channels, initial_layer_channels, num_classes=40, generation_activation=None):
         super(Generator, self).__init__()
         # middle_scaling_layers = log(config.target_image_size, 2) - 3 # end layer has umsampling=2, first layer outputs 4x4
         self.initial_layer_channels = initial_layer_channels
@@ -98,27 +99,27 @@ class Generator(nn.Module):
         self.alpha = 0
         self.activation_function = torch.nn.LeakyReLU(0.2)
 
-
         # init format layer
         self.layer_channels = [initial_layer_channels]
-        self.init_format_layer(latent_vector_dimension)
+
+        self.num_classes = num_classes
+        self.latent_vector_dimension = latent_vector_dimension
+        self.format_layer = EqualizedLinear(self.latent_vector_dimension + num_classes, 4 * 4 * self.layer_channels[0])
 
         self.scale_layers = nn.ModuleList([])
-        self.to_rgb_layers = nn.ModuleList([EqualizedConv2d(self.initial_layer_channels, self.output_image_channels, 1)])
-        self.initial_layer = nn.ModuleList([EqualizedConv2d(self.initial_layer_channels, self.initial_layer_channels, 3, padding=1)])
+        self.to_rgb_layers = nn.ModuleList(
+            [EqualizedConv2d(self.initial_layer_channels, self.output_image_channels, 1)])
+        self.initial_layer = nn.ModuleList(
+            [EqualizedConv2d(self.initial_layer_channels, self.initial_layer_channels, 3, padding=1)])
 
         self.normalization_layer = NormalizationLayer()
 
         self.generation_activation = generation_activation
 
-    def init_format_layer(self, latent_vector_dimension):
-        self.latent_vector_dimension = latent_vector_dimension
-        self.format_layer = EqualizedLinear(self.latent_vector_dimension, 16 * self.layer_channels[0])
-
     def get_output_size(self):
         side = 4 * (2**(len(self.to_rgb_layers) - 1))
-        return (side, side)  
-        
+        return (side, side)
+
     def add_new_layer(self, new_layer_channels):
         previous_layer_channels = self.layer_channels[-1]
         self.layer_channels.append(new_layer_channels)
@@ -129,9 +130,9 @@ class Generator(nn.Module):
                             new_layer_channels,
                             3,
                             padding=1),
-            EqualizedConv2d(new_layer_channels, 
+            EqualizedConv2d(new_layer_channels,
                             new_layer_channels,
-                            3, 
+                            3,
                             padding=1)
         ])
         self.scale_layers.append(new_scale_layers_group)
@@ -140,17 +141,17 @@ class Generator(nn.Module):
         self.to_rgb_layers.append(EqualizedConv2d(new_layer_channels,
                                                   self.output_image_channels,
                                                   1))
-                                                    
-                                                    
+
     def set_new_alpha(self, alpha):
         self.alpha = alpha
-    
 
-    def forward(self, x):
-         ## Normalize the input ?
-        x = self.normalization_layer(x)
-        x = x.view(-1, num_flat_features(x))
+    def forward(self, x, labels):
+        # # Normalize the input ?
+        # x = self.normalization_layer(x)
+        # x = x.view(-1, num_flat_features(x))
+        
         # format layer
+        x = torch.cat((x,labels), dim=1)
         x = self.activation_function(self.format_layer(x))
         x = x.view(x.size()[0], -1, 4, 4)
 
@@ -190,13 +191,13 @@ class Generator(nn.Module):
         return x
 
 
-
 class Discriminator(nn.Module):
-    def __init__(self, input_image_channels, decision_layer_size, initial_layer_channels):
+    def __init__(self, input_image_channels, decision_layer_size, initial_layer_channels, num_classes=40):
         super(Discriminator, self).__init__()
         # Initialization paramneters
         self.input_image_channels = input_image_channels
         self.initial_layer_channels = initial_layer_channels
+        self.num_classes=num_classes
 
         # Initalize the scales
         self.layer_channels = [self.initial_layer_channels]
@@ -208,10 +209,15 @@ class Discriminator(nn.Module):
         # Initialize the last layer
         self.decision_layer = EqualizedLinear(self.layer_channels[0], decision_layer_size)
 
+        self.classification_layer = nn.Sequential(
+            EqualizedLinear(self.layer_channels[0], self.num_classes),
+            nn.Sigmoid()
+        )
+
         # Layer 0
-        self.group_scale_zero = nn.ModuleList([
+        self.initial_layer = nn.ModuleList([
             EqualizedConv2d(self.initial_layer_channels, self.initial_layer_channels, 3, padding=1),
-            EqualizedLinear(self.initial_layer_channels * 16, self.initial_layer_channels)
+            EqualizedLinear(self.initial_layer_channels * 4 * 4, self.initial_layer_channels)
         ])
         self.from_rgb_layers.append(EqualizedConv2d(input_image_channels, self.initial_layer_channels, 1))
 
@@ -222,16 +228,13 @@ class Discriminator(nn.Module):
 
         # self.miniBatchNormalization = miniBatchNormalization
 
-
         # Initalize the upscaling parameters
         self.alpha = 0
 
         # Leaky relu activation
         self.leaky_relu = torch.nn.LeakyReLU(0.2)
 
-    
-    
-    def add_new_layer(self, new_scale = None):
+    def add_new_layer(self, new_scale=None):
         depth_last_scale = self.layer_channels[-1]
         depth_new_scale = new_scale if new_scale else depth_last_scale * 2
         self.layer_channels.append(depth_new_scale)
@@ -242,18 +245,17 @@ class Discriminator(nn.Module):
                             depth_new_scale,
                             3,
                             padding=1),
-            EqualizedConv2d(depth_new_scale, 
+            EqualizedConv2d(depth_new_scale,
                             depth_last_scale,
-                            3, 
+                            3,
                             padding=1)
         ])
         self.scale_layers.append(new_scale_layers_group)
 
         # create and append new rgb layer
-        self.from_rgb_layers.append(EqualizedConv2d(  self.input_image_channels,
+        self.from_rgb_layers.append(EqualizedConv2d(self.input_image_channels,
                                                     depth_new_scale,
                                                     1))
-                                                    
 
     def set_new_alpha(self, alpha):
         r"""
@@ -272,7 +274,6 @@ class Discriminator(nn.Module):
                                  "is defined")
 
         self.alpha = alpha
-
 
     def forward(self, x):
         # Alpha blending
@@ -298,28 +299,18 @@ class Discriminator(nn.Module):
                 merge_layer = False
                 x = self.alpha * y + (1-self.alpha) * x
 
-
         # Now the scale 0
 
         # # Minibatch standard deviation
         # if self.miniBatchNormalization:
         #     x = miniBatchStdDev(x)
 
-        x = self.leaky_relu(self.group_scale_zero[0](x))
+        x = self.leaky_relu(self.initial_layer[0](x))
 
         x = x.view(-1, num_flat_features(x))
-        x = self.leaky_relu(self.group_scale_zero[1](x))
+        x = self.leaky_relu(self.initial_layer[1](x))
 
-        out = self.decision_layer(x)
+        decision_if_real = self.decision_layer(x)
+        classification_output = self.classification_layer(x)
 
-        return out
-
-
-# custom weights initialization called on netG and netD
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname == 'Conv2d' or classname == 'ConvTranspose2d':
-        torch.nn.init.normal_(m.weight, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        torch.nn.init.normal_(m.weight, 1.0, 0.02)
-        torch.nn.init.zeros_(m.bias)
+        return decision_if_real, classification_output

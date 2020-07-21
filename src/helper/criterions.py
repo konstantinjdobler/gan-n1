@@ -15,7 +15,7 @@ def WGANGP_gradient_penalty(input, fake, discriminator, weight, backward=True):
     interpolates = torch.autograd.Variable(
         interpolates, requires_grad=True)
 
-    decisionInterpolate = discriminator(interpolates)
+    decisionInterpolate, labels = discriminator(interpolates)
     decisionInterpolate = decisionInterpolate[:, 0].sum()
 
     gradients = torch.autograd.grad(outputs=decisionInterpolate,
@@ -46,6 +46,10 @@ def Epsilon_loss(prediction_real_data, epsilon_d):
         return 0
 
 
+def MultiLabelClassificationLoss(predicted_labels, real_labels):
+    loss = torch.nn.BCELoss()
+    real_labels[real_labels == -1] = 0
+    return loss(predicted_labels, real_labels)
 
 class ACGANCriterion:
     @staticmethod
