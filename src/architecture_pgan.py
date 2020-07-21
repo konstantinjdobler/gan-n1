@@ -235,7 +235,7 @@ class Generator(nn.Module):
 
         # Dirty, find a better way
         if self.alpha > 0 and len(self.scale_layers) == 1:
-            y = self.to_rbg_layers[-2](x)
+            y = self.to_rgb_layers[-2](x)
             y = Upscale2d(y)
 
         # Upper scales

@@ -213,21 +213,10 @@ class ProgressiveGAN:
 
 
     def add_new_layer(self, new_layer_channels):
-        # In the repo, they just use the "original" version of the net
-        self.generator = self.generator.to('cpu')
-        self.discriminator = self.discriminator.to('cpu')
-
         self.generator.add_new_layer(new_layer_channels)
         self.discriminator.add_new_layer(new_layer_channels)
 
-        self.generator = self.generator.to(self.device)
-        self.discriminator = self.discriminator.to(self.device)
-
-        self.optimizer_generator = self.get_optimizer(self.generator)
-        self.optimizer_discriminator = self.get_optimizer(self.discriminator)
-
-        self.optimizer_discriminator.zero_grad()
-        self.optimizer_generator.zero_grad()
+        self.move_to_device()
     
     def get_optimizer(self, model):
         return optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
@@ -247,6 +236,7 @@ class ProgressiveGAN:
 
         self.optimizer_discriminator.zero_grad()
         self.optimizer_generator.zero_grad()
+
     def get_size(self):
         return self.generator.get_output_size()
 
@@ -254,6 +244,10 @@ class ProgressiveGAN:
         self.generator.set_new_alpha(new_alpha)
         self.discriminator.set_new_alpha(new_alpha)
         self.config['alpha'] = new_alpha
+
+    def generate_image(self, number_of_images):
+        input = torch.randn(number_of_images, self.latent_vector_dimension).to(self.device)
+        return self.generator(input).detach().cpu()
 
 
 class Trainer:
@@ -265,8 +259,8 @@ class Trainer:
         self.config = config
 
         self.model_config = {}
-        #self.model_config['max_iter_at_scale'] = [48000, 96000, 96000, 96000, 96000, 96000, 96000, 96000, 200000]
-        self.model_config['max_iter_at_scale'] = [10, 10, 10, 10, 10, 10, 10, 10, 10]
+        self.model_config['max_iter_at_scale'] = [48000, 96000, 96000, 96000, 96000, 96000, 96000, 96000, 200000]
+        #self.model_config['max_iter_at_scale'] = [10, 10, 10, 10, 10, 10, 10, 10, 10]
 
         # alpha config
         self.model_config['alpha_jump_mode'] = "linear"
@@ -468,10 +462,22 @@ class Trainer:
 
             i += 1
 
+            if i % 100 == 0:
+                print("Iteration: ", i)
+
+            if i % config.sample_interval == 0:
+                #print losses
+                self.generate_image(scale, i)
+
             if i == max_iter:
                 return True
 
         return True
+
+    def generate_image(self, scale, iteration):
+        image = self.model.generate_image(self.model_config['mini_batch_size'])
+        vutils.save_image(image.data[:self.model_config['mini_batch_size']], f'{config.result_dir}/{config.checkpoint_prefix}/scale' + str(scale) + '_iter' + str(iteration) + '.png', normalize=True)
+
 
     def add_new_scales(self, config_new_scales):
 
