@@ -14,26 +14,6 @@ def num_flat_features(x):
         num_features *= s
     return num_features
 
-def miniBatchStdDev(x, sub_group_size=4):
-    size = x.size()
-    sub_group_size = min(size[0], sub_group_size)
-    if size[0] % sub_group_size != 0:
-        sub_group_size = size[0]
-    G = int(size[0] / sub_group_size)
-    if sub_group_size > 1:
-        y = x.view(-1, sub_group_size, size[1], size[2], size[3])
-        y = torch.var(y, 1)
-        y = torch.sqrt(y + 1e-8)
-        y = y.view(G, -1)
-        y = torch.mean(y, 1).view(G, 1)
-        y = y.expand(G, size[2]*size[3]).view((G, 1, 1, size[2], size[3]))
-        y = y.expand(G, sub_group_size, -1, -1, -1)
-        y = y.contiguous().view((-1, 1, size[2], size[3]))
-    else:
-        y = torch.zeros(x.size(0), 1, x.size(2), x.size(3), device=x.device)
-
-    return torch.cat([x, y], dim=1)
-
 class NormalizationLayer(nn.Module):
 
     def __init__(self):
@@ -107,58 +87,6 @@ class EqualizedLinear(ConstrainedLayer):
         ConstrainedLayer.__init__(self,
                                   nn.Linear(nChannelsPrevious, nChannels,
                                   bias=bias), **kwargs)
-
-
-class ConvTranspose2dBlock(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int,
-                 kernel_size: int = 4,
-                 stride: int = 2, padding: int = 1, bias=False,
-                 upsampling_factor: int = None,  # must be divisible by 2
-                 activation_function=nn.ReLU(True),
-                 batch_norm: bool = True):
-
-        super(ConvTranspose2dBlock, self).__init__()
-        if upsampling_factor:
-            # This ensures output dimension are scaled up by upsampling_factor
-            stride = upsampling_factor
-            kernel_size = 2 * upsampling_factor
-            padding = upsampling_factor // 2
-
-        self.conv_layer = nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride, padding, bias=bias)
-        self.batch_norm = nn.BatchNorm2d(out_channels) if batch_norm else None
-        self.activation = activation_function
-
-    def forward(self, x):
-        out = self.conv_layer(x)
-        if self.batch_norm:
-            out = self.batch_norm(out)
-        return self.activation(out)
-
-
-class Conv2dBlock(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int,
-                 kernel_size: int = 4,
-                 stride: int = 2, padding: int = 1, bias=False,
-                 downsampling_factor: int = None,  # must be divisible by 2
-                 activation_function=nn.LeakyReLU(0.2, inplace=True),  # from GAN Hacks
-                 batch_norm: bool = True):
-
-        super(Conv2dBlock, self).__init__()
-        if downsampling_factor:
-            # This ensures output dimension are scaled down by downsampling_factor
-            stride = downsampling_factor
-            kernel_size = 2 * downsampling_factor
-            padding = downsampling_factor // 2
-
-        self.conv_layer = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=bias)
-        self.batch_norm = nn.BatchNorm2d(out_channels) if batch_norm else None
-        self.activation = activation_function
-
-    def forward(self, x):
-        out = self.conv_layer(x)
-        if self.batch_norm:
-            out = self.batch_norm(out)
-        return self.activation(out)
 
 
 class Generator(nn.Module):

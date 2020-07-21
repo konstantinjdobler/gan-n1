@@ -5,3 +5,4 @@ venv/
 checkpoints/
 fake_samples/
 src/output/
+.DS_Store
