@@ -69,6 +69,10 @@ class ProgressiveGAN:
     def load_checkpoint(self, checkpoint_path):
         states = Store.load(checkpoint_path)
 
+        #TODO: When loading a checkpoint, we have to decide, whether a new scale level should be started
+        # or whether we continue the training on the given scale level. This decision is dependent on the number of
+        # iterations that already have been completed in the saved checkpoint
+
         # Overwrite internal attributes
         self.config = states['config']
         self.num_of_scale_iterations = states['scaleIteration']
@@ -85,13 +89,16 @@ class ProgressiveGAN:
         self.generator.load_state_dict(states['generatorState'])
 
         self.move_to_device()
-        
+
         # Overwrite Optimizer States
         self.optimizer_discriminator.load_state_dict(states['discriminatorOptimizer'])
         self.optimizer_generator.load_state_dict(states['generatorOptimizer'])
 
-    def save_checkpoint(self):
+        self.add_new_layer(self.config['scaling_layer_channels'][self.num_of_scale_iterations + 1]) # TODO: Decide based on num_of_iterations_in_scale whether this is necessary
+
+    def save_checkpoint(self, num_of_iterations_in_scale):
         checkpoint = {'scaleIteration': self.num_of_scale_iterations,
+                      'numIterations' : num_of_iterations_in_scale,   # TODO: I added this, but it is not yet read anywhere. It should be used for initializing the start_iter of the Trainer
                       'config': self.config,
                       'generatorState': self.generator.state_dict(),
                       'discriminatorState': self.discriminator.state_dict(),
@@ -245,6 +252,7 @@ class Trainer:
         self.scale_sanity_check()
 
         self.init_model()
+        self.start_scale = self.model.num_of_scale_iterations
 
     def init_model(self):
         self.model = ProgressiveGAN(self.model_config, self.config.checkpoint)
@@ -438,7 +446,7 @@ class Trainer:
             # Save Image and Model Checkpoint
             if i % config.sample_interval == 0:
                 self.generate_image(scale, i, labels)
-                self.model.save_checkpoint()
+                self.model.save_checkpoint(i)
                 self.write_loss_to_file(scale)
 
             if i == max_iter:
