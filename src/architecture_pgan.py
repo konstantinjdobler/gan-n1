@@ -7,6 +7,26 @@ import math
 from numpy import prod
 
 
+def mini_batch_std_dev(x, sub_group_size=4):
+    size = x.size()
+    sub_group_size = min(size[0], sub_group_size)
+    if size[0] % sub_group_size != 0:
+        sub_group_size = size[0]
+    G = int(size[0] / sub_group_size)
+    if sub_group_size > 1:
+        y = x.view(-1, sub_group_size, size[1], size[2], size[3])
+        y = torch.var(y, 1)
+        y = torch.sqrt(y + 1e-8)
+        y = y.view(G, -1)
+        y = torch.mean(y, 1).view(G, 1)
+        y = y.expand(G, size[2]*size[3]).view((G, 1, 1, size[2], size[3]))
+        y = y.expand(G, sub_group_size, -1, -1, -1)
+        y = y.contiguous().view((-1, 1, size[2], size[3]))
+    else:
+        y = torch.zeros(x.size(0), 1, x.size(2), x.size(3), device=x.device)
+
+    return torch.cat([x, y], dim=1)
+
 def num_flat_features(x):
     size = x.size()[1:]  # all dimensions except the batch dimension
     num_features = 1
@@ -216,17 +236,17 @@ class Discriminator(nn.Module):
 
         # Layer 0
         self.initial_layer = nn.ModuleList([
-            EqualizedConv2d(self.initial_layer_channels, self.initial_layer_channels, 3, padding=1),
+            EqualizedConv2d(self.initial_layer_channels + 1, self.initial_layer_channels, 3, padding=1),
             EqualizedLinear(self.initial_layer_channels * 4 * 4, self.initial_layer_channels)
         ])
         self.from_rgb_layers.append(EqualizedConv2d(input_image_channels, self.initial_layer_channels, 1))
 
-        # # Minibatch standard deviation
-        # dim_entry_scale_0 = depthScale0
-        # if miniBatchNormalization:
-        #     dim_entry_scale_0 += 1
+        # Minibatch standard deviation
+        #dim_entry_scale_0 = depthScale0
+        #if miniBatchNormalization:
+        #    dim_entry_scale_0 += 1
 
-        # self.miniBatchNormalization = miniBatchNormalization
+        #self.miniBatchNormalization = miniBatchNormalization
 
         # Initalize the upscaling parameters
         self.alpha = 0
@@ -303,7 +323,7 @@ class Discriminator(nn.Module):
 
         # # Minibatch standard deviation
         # if self.miniBatchNormalization:
-        #     x = miniBatchStdDev(x)
+        x = mini_batch_std_dev(x)
 
         x = self.leaky_relu(self.initial_layer[0](x))
 
