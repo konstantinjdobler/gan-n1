@@ -26,7 +26,7 @@ from helper.arg_parser import ArgParser
 from helper.store import Store
 from helper.criterions import WGANGP_loss, WGANGP_gradient_penalty, Epsilon_loss, ACGANCriterion
 from helper.checks import isinf, isnan, finite_check
-from helper.numpy import NumpyFlip, NumpyResize, NumpyToTensor
+from helper.numpy import NumpyFlip, NumpyToTensor
 
 # beta1 is a hyperparameter, suggestion from hack repo is 0.5
 # betas = (0.5, 0.99)  # adam optimizer beta1, beta2
@@ -191,6 +191,7 @@ class ProgressiveGAN:
         return self.generator.get_output_size()
 
     def update_alpha(self, new_alpha):
+        print('Updated alpha: ', new_alpha)
         self.generator.set_new_alpha(new_alpha)
         self.discriminator.set_new_alpha(new_alpha)
         self.config['alpha'] = new_alpha
@@ -328,16 +329,23 @@ class Trainer:
         if size is None:
             size = self.model.get_size()
 
+
         scaled_image_resolution = 4 * 2**scale_iteration
         print("size", size)
-        transform_list = [NumpyResize(size),
-                          NumpyToTensor(),
+
+        path = self.path_db + f'{scaled_image_resolution}'
+        resizeSize = None
+        if not os.path.isdir(path):
+            path = self.path_db
+            resizeSize = size
+
+        transform_list = [NumpyToTensor(resizeSize),
                           transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
 
         transform = transforms.Compose(transform_list)
 
         # TODO: actiavte multi resolution image dataset when you have it on your computer
-        data_set = ImageFeatureFolder(image_root=self.path_db,
+        data_set = ImageFeatureFolder(image_root=path,
                                       attribute_file=self.config.condition_file, transform=transform)
 
         # data_set = AttribDataset(self.path_db, #+ f'/{scaled_image_resolution}',
@@ -419,7 +427,7 @@ class Trainer:
 
             i += 1
 
-            if i % 100 == 0:
+            if i % config.training_info_interval == 0:
                 print("Iteration: ", i, " Alpha: ", self.model.config['alpha'])
                 print("Generator Loss: ", str(self.model.lossG.item()),
                       " Discrimnator Loss: ", str(self.model.lossD.item()))

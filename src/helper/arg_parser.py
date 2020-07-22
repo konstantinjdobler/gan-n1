@@ -13,14 +13,14 @@ class ArgParser:
         self.parser.add_argument('-s', '--save-checkpoints', dest='save_checkpoints', action='store_true')
         self.parser.add_argument('--nrs', '--no-random-sample', dest='random_sample', action='store_false',
                             help='save random samples of fake faces during training')
-        self.parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=800,
+        self.parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=100,
                             help='controls how often during an epoch info is printed')
-        self.parser.add_argument('--si', '--sample-interval', dest='sample_interval', type=int, default=1500,
+        self.parser.add_argument('--si', '--sample-interval', dest='sample_interval', type=int, default=16000,
                             help='controls how often during an epoch sample images are saved ')
         self.parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
         self.parser.add_argument('--batch-size', type=int, default=32)
         self.parser.add_argument('--epochs', type=int, default=20)
-        self.parser.add_argument('--workers', type=int, default=2)
+        self.parser.add_argument('--workers', type=int, default=4)
         self.parser.add_argument('--nz', type=int, default=100)  # number of noise dimension
         self.parser.add_argument('--nc', type=int, default=3)  # number of result channel
         self.parser.add_argument('--nfeature', type=int, default=40)
