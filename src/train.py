@@ -66,26 +66,29 @@ class ProgressiveGAN:
         if checkpoint_path:
             self.load_checkpoint(checkpoint_path)
 
-    def load_checkpoint(checkpoint_path):
+    def load_checkpoint(self, checkpoint_path):
         states = Store.load(checkpoint_path)
 
         # Overwrite internal attributes
         self.config = states['config']
-        self.self.num_of_scale_iterations = in_state['scaleIteration']
+        self.num_of_scale_iterations = states['scaleIteration']
         self.learning_rate = states['config']['learning_rate']
 
         # Bring models to the same architectural structure as the loaded state requires
-        for scale_iteration in range(1, self.self.num_of_scale_iterations + 1):
+        for scale_iteration in range(1, self.num_of_scale_iterations + 1):
             scaling_layer_channel = self.config['scaling_layer_channels'][scale_iteration]
             self.discriminator.add_new_layer(scaling_layer_channel)
             self.generator.add_new_layer(scaling_layer_channel)
 
         # Overwrite Model States
-        self.discriminator.load_state_dict(config['discriminatorState'])
-        self.generator.load_state_dict(config['generatorState'])
+        self.discriminator.load_state_dict(states['discriminatorState'])
+        self.generator.load_state_dict(states['generatorState'])
+
+        self.move_to_device()
+        
         # Overwrite Optimizer States
-        self.optimizer_discriminator.load_state_dict(config['dOptimizer'])
-        self.optimizer_generator.load_state_dict(config['gOptimizer'])
+        self.optimizer_discriminator.load_state_dict(states['discriminatorOptimizer'])
+        self.optimizer_generator.load_state_dict(states['generatorOptimizer'])
 
     def save_checkpoint(self):
         checkpoint = {'scaleIteration': self.num_of_scale_iterations,
