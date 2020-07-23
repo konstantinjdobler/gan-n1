@@ -12,6 +12,7 @@ import torch.backends.cudnn as cudnn
 from tqdm import tqdm
 import random
 import matplotlib.pyplot as plt
+from numpy import array
 
 from architecture import Generator, Discriminator, weights_init
 from data_loading import ImageFeatureFolder
@@ -83,11 +84,13 @@ class Trainer:
         if config.discriminator_path is not None:
             self.discriminator.load_state_dict(torch.load(config.discriminator_path))
         # print("Discriminator: ", self.discriminator)
-
+        self.loss_history_legend = ("discriminator", "discriminator_condition", "generator", "generator_condition")
         self.loss_history = []
         self.LOG = {
             "loss_descriminator": [],
-            "loss_generator": []
+            "classification_loss_descriminator": [],
+            "loss_generator": [],
+            "classification_loss_generator": [],
         }
 
     def randomly_flip_labels(self, labels, p: float = 0.05):
@@ -118,8 +121,6 @@ class Trainer:
                 ############################
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
-                self.discriminator.train()
-                self.generator.eval()
                 self.discriminator.zero_grad()
 
                 if config.label_smoothing:
@@ -137,37 +138,36 @@ class Trainer:
                 d_fake_faces, labels_fake_faces = self.discriminator(
                     fake_faces.detach(), config=config)  # do not update generator
 
-                classification_loss = self.classification_loss(
-                    labels_fake_faces, labels_zero_one) + self.classification_loss(labels_real_faces, labels_zero_one)
-                discriminator_loss = self.loss(d_real_faces, discriminator_target_real) + \
-                    self.loss(d_fake_faces, discriminator_target_fake) + \
-                    classification_loss
+                d_classification_loss = (self.classification_loss(
+                    labels_fake_faces, labels_zero_one) + self.classification_loss(labels_real_faces, labels_zero_one)) / 2
+                discriminator_loss = (self.loss(d_real_faces, discriminator_target_real) +
+                                      self.loss(d_fake_faces, discriminator_target_fake)) / 2
 
-                discriminator_loss.backward()
+                combined_discriminator_loss = (d_classification_loss + discriminator_loss) / 2
+                combined_discriminator_loss.backward()
                 self.optimizer_discriminator.step()
 
                 ############################
                 # (2) Update G network: maximize log(D(G(z)))
                 ###########################
-                self.discriminator.eval()
-                self.generator.train()
                 self.generator.zero_grad()
 
                 z_noise.data.normal_(0, 1)
                 fake_faces = self.generator(z_noise, labels, config=config)
-
                 d_fake_faces, labels_fake_faces = self.discriminator(fake_faces, config=config)
-                classification_loss = self.classification_loss(labels_fake_faces, labels_zero_one)
-                generator_loss = self.loss(d_fake_faces, generator_target) + classification_loss
 
-                generator_loss.backward()
+                g_classification_loss = self.classification_loss(labels_fake_faces, labels_zero_one)
+                generator_loss = self.loss(d_fake_faces, generator_target)
+                combined_generator_loss = (generator_loss + g_classification_loss) / 2
+                combined_generator_loss.backward()
                 self.optimizer_generator.step()
 
-                self.loss_history.append((discriminator_loss.item(), generator_loss.item()))
-                self.batch_training_info_and_samples(epoch, i, generator_loss, discriminator_loss, config,
+                self.loss_history.append((discriminator_loss.item(), d_classification_loss.item(),
+                                          generator_loss.item(), g_classification_loss.item()))
+                self.batch_training_info_and_samples(epoch, i, combined_generator_loss, combined_generator_loss, config,
                                                      fake_faces, fixed_noise, fixed_labels)
             self.epoch_training_info_and_samples(
-                epoch, generator_loss, discriminator_loss, config, fake_faces, fixed_noise, fixed_labels)
+                epoch, combined_generator_loss, combined_generator_loss, config, fake_faces, fixed_noise, fixed_labels)
             ######### epoch finished ##########
 
     def batch_training_info_and_samples(self, epoch, batch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_labels):
@@ -175,10 +175,6 @@ class Trainer:
         self.LOG["loss_descriminator"].append(d_loss)
 
         if config.print_loss and batch > 0 and batch % config.training_info_interval == 0:
-            with open(f'{config.result_dir}/{config.checkpoint_prefix}/losses.txt', "a") as loss_file:
-                loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n')
-                                  for loss_entry in self.loss_history))
-            self.loss_history = []
             if config.print_loss:
                 tqdm.write(
                     f"epoch {epoch+1} batch {batch} | generator loss: {g_loss} | discriminator loss: {d_loss}")
@@ -187,18 +183,25 @@ class Trainer:
                 vutils.save_image(
                     fake_faces.data[:min(config.batch_size, 32)], f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}_batch_{batch}.png', normalize=True)
             if config.fixed_noise_sample:
+                self.generator.eval()
                 with torch.no_grad():
                     fixed_fake = self.generator(fixed_noise, fixed_labels, config)
                     vutils.save_image(fixed_fake.detach()[:min(config.batch_size, 32)],
                                       f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{batch}.png', normalize=True)
+                self.generator.train()
 
     def epoch_training_info_and_samples(self, epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_labels):
         for key, values in self.LOG.items():
             plt.plot(values, label=key)
-        plt.legend(loc="upper left")
+
+        # for idx, values in enumerate(zip(*[(t[0] + t[1], t[2] + t[3]) for t in self.loss_history])):
+        #     plt.plot(array(values), label=self.loss_history_legend[idx*2])
+
+        plt.legend(loc="best")
+        plt.title(f"Losses in epoch {epoch}")
         plt.ylabel('Loss')
         plt.xlabel('Iterations')
-        # plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
+        plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
         self.LOG = {
             "loss_descriminator": [],
             "loss_generator": []
@@ -218,10 +221,12 @@ class Trainer:
             vutils.save_image(
                 fake_faces.data[:min(config.batch_size, 32)], f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}.png', normalize=True)
         if config.fixed_noise_sample:
+            self.generator.eval()
             with torch.no_grad():
                 fixed_fake = self.generator(fixed_noise, fixed_labels, config)
                 vutils.save_image(fixed_fake.detach()[:min(config.batch_size, 32)],
                                   f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}.png', normalize=True)
+            self.generator.train()
         if config.save_checkpoints:
             torch.save(self.generator.state_dict(),
                        f'{config.result_dir}/{config.checkpoint_prefix}/generator_epoch_{epoch+1}.pt')
