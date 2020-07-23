@@ -175,7 +175,7 @@ class Trainer:
         self.LOG["loss_descriminator"].append(d_loss)
 
         if config.print_loss and batch > 0 and batch % config.training_info_interval == 0:
-            with open(f'{self.config.result_dir}/{self.config.checkpoint_prefix}/losses.txt', "a") as loss_file:
+            with open(f'{config.result_dir}/{config.checkpoint_prefix}/losses.txt', "a") as loss_file:
                 loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n')
                                   for loss_entry in self.loss_history))
             self.loss_history = []
@@ -204,7 +204,7 @@ class Trainer:
             "loss_generator": []
         }
 
-        with open(f'{self.config.result_dir}/{self.config.checkpoint_prefix}/losses.txt', "a") as loss_file:
+        with open(f'{config.result_dir}/{config.checkpoint_prefix}/losses.txt', "a") as loss_file:
             loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n')
                                   for loss_entry in self.loss_history))
         self.loss_history = []
