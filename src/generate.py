@@ -10,8 +10,8 @@ parser = argparse.ArgumentParser("Generate image of faces")
 
 parser.add_argument('--result-path', dest='result_path', type=str, default='./fake_samples/generatedImage.png')
 parser.add_argument('-g', '--generator-path', dest='generator_path', type=str, default='')
-parser.add_argument('-a', '--attributes', type=str, default='')
-parser.add_argument('-n', '--number-of-images', dest='number_of_images', type=int, default=1)
+parser.add_argument('-a', '--attributes', type=str, default='./src/attributes.txt')
+parser.add_argument('-n', '--number-of-images', dest='number_of_images', type=int, default=16)
 parser.add_argument('-r', '--image-resolution', dest='image_resolution', type=int, default=256)
 
 
@@ -43,7 +43,8 @@ if __name__ == '__main__':
     config.generator_filters = 64
 
     generator = Generator(config).to(device)
-    generator.load_state_dict(torch.load(config.generator_path))
+    generator.load_state_dict(torch.load(config.generator_path, map_location = device))
+    generator.eval()
 
     noise = Variable(FloatTensor(config.number_of_images, 100, 1, 1)).to(device)
     noise.data.normal_(0, 1)
