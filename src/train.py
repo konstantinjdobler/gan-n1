@@ -87,10 +87,8 @@ class Trainer:
         self.loss_history_legend = ("discriminator", "discriminator_condition", "generator", "generator_condition")
         self.loss_history = []
         self.LOG = {
-            "loss_descriminator": [],
-            "classification_loss_descriminator": [],
+            "loss_discriminator": [],
             "loss_generator": [],
-            "classification_loss_generator": [],
         }
 
     def randomly_flip_labels(self, labels, p: float = 0.05):
@@ -164,7 +162,7 @@ class Trainer:
 
                 self.loss_history.append((discriminator_loss.item(), d_classification_loss.item(),
                                           generator_loss.item(), g_classification_loss.item()))
-                self.batch_training_info_and_samples(epoch, i, combined_generator_loss, combined_generator_loss, config,
+                self.batch_training_info_and_samples(epoch, i, combined_generator_loss, combined_discriminator_loss, config,
                                                      fake_faces, fixed_noise, fixed_labels)
             self.epoch_training_info_and_samples(
                 epoch, combined_generator_loss, combined_generator_loss, config, fake_faces, fixed_noise, fixed_labels)
@@ -172,7 +170,7 @@ class Trainer:
 
     def batch_training_info_and_samples(self, epoch, batch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_labels):
         self.LOG["loss_generator"].append(g_loss)
-        self.LOG["loss_descriminator"].append(d_loss)
+        self.LOG["loss_discriminator"].append(d_loss)
 
         if config.print_loss and batch > 0 and batch % config.training_info_interval == 0:
             if config.print_loss:
@@ -203,7 +201,7 @@ class Trainer:
         plt.xlabel('Iterations')
         plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
         self.LOG = {
-            "loss_descriminator": [],
+            "loss_discriminator": [],
             "loss_generator": []
         }
 
