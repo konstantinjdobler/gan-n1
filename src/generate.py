@@ -44,6 +44,7 @@ if __name__ == '__main__':
 
     generator = Generator(config).to(device)
     generator.load_state_dict(torch.load(config.generator_path))
+    generator.eval()
 
     noise = Variable(FloatTensor(config.number_of_images, 100, 1, 1)).to(device)
     noise.data.normal_(0, 1)
