@@ -87,7 +87,7 @@ class ProgressiveGAN:
                       'generator_state': self.generator.state_dict(),
                       'discriminator_state': self.discriminator.state_dict(),
                       'generator_optimizer': self.optimizer_generator.state_dict(),
-                      'discriminator:optimizer': self.optimizer_discriminator.state_dict()}
+                      'discriminator_optimizer': self.optimizer_discriminator.state_dict()}
 
         Store.save(
             checkpoint, f"{self.config['result_dir']}/{self.config['checkpoint_prefix']}/", self.current_scale_level)
@@ -146,7 +146,7 @@ class ProgressiveGAN:
     def add_new_layer(self, new_layer_channels):
         self.generator.add_new_layer(new_layer_channels)
         self.discriminator.add_new_layer(new_layer_channels)
-        self.num_of_scale_iterations += 1
+        self.current_scale_level += 1
         self.move_to_device()
 
     def get_optimizer(self, model):
