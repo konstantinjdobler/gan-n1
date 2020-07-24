@@ -191,6 +191,10 @@ class Trainer:
             loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n')
                                   for loss_entry in self.loss_history))
         self.loss_history = []
+        self.LOG = {
+            "loss_descriminator": [],
+            "loss_generator": []
+        }
 
         if config.print_loss:
             tqdm.write(f"epoch {epoch+1} | generator loss: {g_loss} | discriminator loss: {d_loss}")

@@ -10,6 +10,8 @@ parser = argparse.ArgumentParser("Generate image of faces")
 
 parser.add_argument('--result-path', dest='result_path', type=str, default='./fake_samples/generatedImage.png')
 parser.add_argument('-g', '--generator-path', dest='generator_path', type=str, default='')
+parser.add_argument('-d', '--discriminator-path', dest='discriminator_path', type=str, default='')
+
 parser.add_argument('-a', '--attributes', type=str, default='./src/attributes.txt')
 parser.add_argument('-n', '--number-of-images', dest='number_of_images', type=int, default=16)
 parser.add_argument('-r', '--image-resolution', dest='image_resolution', type=int, default=256)
@@ -42,14 +44,24 @@ if __name__ == '__main__':
     config.nc = 3
     config.nfeature = 40
     config.generator_filters = 64
+    config.discriminator_filters = 64
 
     generator = Generator(config).to(device)
     generator.load_state_dict(torch.load(config.generator_path, map_location = device))
     generator.eval()
 
+    # discriminator = Discriminator(config).to(device)
+    # discriminator.load_state_dict(torch.load(config.discriminator_path, map_location = device))
+    # discriminator.eval()
+
     noise = Variable(FloatTensor(config.number_of_images, 100, 1, 1)).to(device)
     noise.data.normal_(0, 1)
     faces = generator(noise, attributes.repeat(config.number_of_images,1), config)
+
+    # d, c = discriminator(faces, config)
+    # c = nn.Sigmoid() (c)
+    # print(f"Probability that face is real: {d}")
+    # print("Classification output", c)
 
     vutils.save_image(faces.data[:config.number_of_images], f'{config.result_path}', normalize=True)
 

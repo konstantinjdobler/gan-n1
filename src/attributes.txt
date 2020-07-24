@@ -3,7 +3,7 @@ Arched_Eyebrows,0
 Attractive,1
 Bags_Under_Eyes,0
 Bald,0
-Bangs,0
+Bangs,1
 Big_Lips,1
 Big_Nose,0
 Black_Hair,0
@@ -13,7 +13,7 @@ Brown_Hair,0
 Bushy_Eyebrows,0
 Chubby,0
 Double_Chin,0
-Eyeglasses,1
+Eyeglasses,0
 Goatee,0
 Gray_Hair,0
 Heavy_Makeup,1
@@ -26,7 +26,7 @@ No_Beard,1
 Oval_Face,0
 Pale_Skin,1
 Pointy_Nose,1
-Receding_Hairline,0 
+Receding_Hairline,0
 Rosy_Cheeks,1
 Sideburns,0
 Smiling,1
