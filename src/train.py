@@ -122,7 +122,7 @@ class Trainer:
                 self.discriminator.zero_grad()
 
                 if config.label_smoothing:
-                    discriminator_target_real.data.uniform_(0.7, 1.0)  # one-sided label smoothing
+                    discriminator_target_real.data.uniform_(0.9, 1.0)  # one-sided label smoothing
                 if config.label_flipping:
                     discriminator_target_real.data = self.randomly_flip_labels(
                         discriminator_target_real.data, p=0.05)  # label flipping
@@ -141,7 +141,7 @@ class Trainer:
                 discriminator_loss = (self.loss(d_real_faces, discriminator_target_real) +
                                       self.loss(d_fake_faces, discriminator_target_fake)) / 2
 
-                combined_discriminator_loss = (d_classification_loss + discriminator_loss) / 2
+                combined_discriminator_loss = d_classification_loss + discriminator_loss
                 combined_discriminator_loss.backward()
                 self.optimizer_discriminator.step()
 
@@ -156,7 +156,7 @@ class Trainer:
 
                 g_classification_loss = self.classification_loss(labels_fake_faces, labels_zero_one)
                 generator_loss = self.loss(d_fake_faces, generator_target)
-                combined_generator_loss = (generator_loss + g_classification_loss) / 2
+                combined_generator_loss = generator_loss + g_classification_loss
                 combined_generator_loss.backward()
                 self.optimizer_generator.step()
 

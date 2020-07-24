@@ -61,7 +61,6 @@ class Generator(nn.Module):
         super(Generator, self).__init__()
         # middle_scaling_layers = log(config.target_image_size, 2) - 3 # end layer has umsampling=2, first layer outputs 4x4
         adjustment_to_image_size = config.target_image_size // 64  # 64 is standard output
-        self.linear_layer = nn.Linear(config.nz + config.nfeature, config.generator_filters * 16)
         self.convolution_layers = nn.Sequential(
             ConvTranspose2dBlock(in_channels=config.nz + config.nfeature,
                                  out_channels=config.generator_filters * 8,
@@ -85,8 +84,8 @@ class Generator(nn.Module):
     def forward(self, x, attr, config):
         attr = attr.view(-1, config.nfeature, 1, 1)
         x = torch.cat([x, attr], 1)
-        #x = self.linear_layer(x)
-        #x = x.view(-1, config.generator_filters * 16, 1, 1)
+        # x = self.linear_layer(x)
+        # x = x.view(-1, config.generator_filters * 16, 1, 1)
         return self.convolution_layers(x)
 
 
@@ -95,8 +94,16 @@ class Discriminator(nn.Module):
         super(Discriminator, self).__init__()
         # self.feature_input = nn.Linear(config.nfeature,
         #                                config.target_image_size * config.target_image_size)
-        self.decision_layer = nn.Sequential(nn.Linear(config.discriminator_filters * 16, 1), nn.Sigmoid())
-        self.classification_layer = nn.Linear(config.discriminator_filters * 16, config.nfeature)
+        self.decision_layer = Conv2dBlock(in_channels=config.discriminator_filters * 8,
+                                          out_channels=1, kernel_size=4, stride=1, padding=0,
+                                          batch_norm=False, activation_function=nn.Sigmoid()
+                                          )
+
+        self.classification_layer = nn.Sequential(
+            Conv2dBlock(in_channels=config.discriminator_filters * 8,
+                        out_channels=config.discriminator_filters * 16, kernel_size=4, stride=1, padding=0,
+                        batch_norm=False),
+            nn.Linear(config.discriminator_filters * 16, config.nfeature))
 
         adjustment_to_image_size = config.target_image_size // 64  # 64 is standard input
         self.convolution_layers = nn.Sequential(
@@ -114,18 +121,12 @@ class Discriminator(nn.Module):
             Conv2dBlock(in_channels=config.discriminator_filters * 4,
                         out_channels=config.discriminator_filters * 8,
                         downsampling_factor=2),
-
-            Conv2dBlock(in_channels=config.discriminator_filters * 8,
-                        out_channels=config.discriminator_filters * 16, kernel_size=4, stride=1, padding=0,
-                        batch_norm=False),
         )
 
     def forward(self, x, config):
         # attr = self.feature_input(attr).view(-1, 1, config.target_image_size, config.target_image_size)
         # x = torch.cat([x, attr], 1)
         x = self.convolution_layers(x)
-        x = x.view(-1, config.discriminator_filters*16 )
-
         decision = self.decision_layer(x).view(-1, 1)
         classification = self.classification_layer(x).view(-1, config.nfeature)
         return decision, classification
