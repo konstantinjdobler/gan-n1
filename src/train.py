@@ -83,6 +83,7 @@ class Trainer:
             self.discriminator.load_state_dict(torch.load(config.discriminator_path))
         # print("Discriminator: ", self.discriminator)
 
+        self.loss_history = []
         self.LOG = {
             "loss_descriminator": [],
             "loss_generator": []
@@ -150,6 +151,8 @@ class Trainer:
                 g_loss = self.loss(d_fake, generator_target)
                 g_loss.backward()
                 self.optimizer_generator.step()
+
+                self.loss_history.append((g_loss, d_loss))
                 self.batch_training_info_and_samples(epoch, i, g_loss, d_loss, config,
                                                      fake_faces, fixed_noise, fixed_attr)
             self.epoch_training_info_and_samples(epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr)
@@ -183,6 +186,11 @@ class Trainer:
 
         if config.show_loss_plot:
             plt.show()
+        
+        with open(f'{config.result_dir}/{config.checkpoint_prefix}/losses.txt', "a") as loss_file:
+            loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n')
+                                  for loss_entry in self.loss_history))
+        self.loss_history = []
 
         if config.print_loss:
             tqdm.write(f"epoch {epoch+1} | generator loss: {g_loss} | discriminator loss: {d_loss}")
@@ -196,9 +204,9 @@ class Trainer:
                                   f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}.png', normalize=True)
         if config.save_checkpoints:
             torch.save(self.generator.state_dict(),
-                       f'{config.checkpoint_dir}/{config.checkpoint_prefix}/generator_epoch_{epoch+1}.pt')
+                       f'{config.result_dir}/{config.checkpoint_prefix}/generator_epoch_{epoch+1}.pt')
             torch.save(self.discriminator.state_dict(),
-                       f'{config.checkpoint_dir}/{config.checkpoint_prefix}/discriminator_epoch_{epoch+1}.pt')
+                       f'{config.result_dir}/{config.checkpoint_prefix}/discriminator_epoch_{epoch+1}.pt')
 
 
 if __name__ == '__main__':
