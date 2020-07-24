@@ -1,22 +1,7 @@
-import torch
 import torchvision.transforms as transforms
 import random
 from PIL import Image
 import numpy as np
-
-# class NumpyResize(object):
-
-#     def __init__(self, size):
-#         self.size = size
-
-#     def __call__(self, img):
-#         if not isinstance(img, Image.Image):
-#             img = Image.fromarray(img)
-#         return np.array(img.resize(self.size, resample=Image.BILINEAR))
-
-#     def __repr__(self):
-#         return self.__class__.__name__ + '(p={})'.format(self.p)
-
 
 class NumpyFlip(object):
 
