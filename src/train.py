@@ -98,7 +98,8 @@ class Trainer:
     def train(self, dataloader):
         # for progress visualization
         fixed_noise = torch.randn(config.batch_size, config.nz, 1, 1, device=device)
-        fixed_attr = torch.FloatTensor(config.nfeature, config.batch_size).uniform_(0, 2).gt(1).int().float().to(device)
+        fixed_attr = (torch.FloatTensor(config.nfeature, config.batch_size).uniform_() > 0.7 ).to(device)
+        fixed_attr[fixed_attr == 0] = -1
 
         z_noise = Variable(FloatTensor(config.batch_size, config.nz, 1, 1)).to(device)
         generator_target = Variable(FloatTensor(config.batch_size, 1).fill_(1)).to(device)
