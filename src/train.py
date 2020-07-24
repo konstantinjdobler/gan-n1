@@ -163,9 +163,9 @@ class Trainer:
                 self.loss_history.append((discriminator_loss.item(), d_classification_loss.item(),
                                           generator_loss.item(), g_classification_loss.item()))
                 self.batch_training_info_and_samples(epoch, i, combined_generator_loss, combined_discriminator_loss, config,
-                                                     fake_faces, fixed_noise, fixed_labels)
+                                                     fake_faces, fixed_noise, fixed_attr)
             self.epoch_training_info_and_samples(
-                epoch, combined_generator_loss, combined_generator_loss, config, fake_faces, fixed_noise, fixed_labels)
+                epoch, combined_generator_loss, combined_generator_loss, config, fake_faces, fixed_noise, fixed_attr)
             ######### epoch finished ##########
 
     def batch_training_info_and_samples(self, epoch, batch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_labels):

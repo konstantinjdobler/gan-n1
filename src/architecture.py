@@ -99,11 +99,9 @@ class Discriminator(nn.Module):
                                           batch_norm=False, activation_function=nn.Sigmoid()
                                           )
 
-        self.classification_layer = nn.Sequential(
-            Conv2dBlock(in_channels=config.discriminator_filters * 8,
-                        out_channels=config.discriminator_filters * 16, kernel_size=4, stride=1, padding=0,
-                        batch_norm=False),
-            nn.Linear(config.discriminator_filters * 16, config.nfeature))
+        self.classification_layer = Conv2dBlock(in_channels=config.discriminator_filters * 8,
+                        out_channels=40, kernel_size=4, stride=1, padding=0,
+                        batch_norm=False)
 
         adjustment_to_image_size = config.target_image_size // 64  # 64 is standard input
         self.convolution_layers = nn.Sequential(
@@ -128,6 +126,7 @@ class Discriminator(nn.Module):
         # x = torch.cat([x, attr], 1)
         x = self.convolution_layers(x)
         decision = self.decision_layer(x).view(-1, 1)
+
         classification = self.classification_layer(x).view(-1, config.nfeature)
         return decision, classification
 
