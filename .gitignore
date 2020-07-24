@@ -6,3 +6,6 @@ checkpoints/
 fake_samples/
 src/output/
 results/
+.DS_Store
+__pycache__/
+.vscode/
