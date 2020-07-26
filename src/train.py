@@ -101,7 +101,7 @@ class Trainer:
     def train(self, dataloader):
         # for progress visualization
         fixed_noise = torch.randn(config.batch_size, config.nz, 1, 1, device=device)
-        fixed_attr = (torch.FloatTensor(config.nfeature, config.batch_size).uniform_() > 0.7 ).to(device)
+        fixed_attr = (torch.FloatTensor(config.nfeature, config.batch_size).uniform_() > 0.7).to(device)
         fixed_attr[fixed_attr == 0] = -1
 
         z_noise = Variable(FloatTensor(config.batch_size, config.nz, 1, 1)).to(device)
@@ -119,7 +119,7 @@ class Trainer:
                 ############################
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
-                self.discriminator.zero_grad()
+                self.optimizer_discriminator.zero_grad()
 
                 if config.label_smoothing:
                     discriminator_target_real.data.uniform_(0.9, 1.0)  # one-sided label smoothing
@@ -136,36 +136,36 @@ class Trainer:
                 d_fake_faces, labels_fake_faces = self.discriminator(
                     fake_faces.detach(), config=config)  # do not update generator
 
-                d_classification_loss = (self.classification_loss(
-                    labels_fake_faces, labels_zero_one) + self.classification_loss(labels_real_faces, labels_zero_one)) / 2
-                discriminator_loss = (self.loss(d_real_faces, discriminator_target_real) +
-                                      self.loss(d_fake_faces, discriminator_target_fake)) / 2
+                d_classification_loss = self.classification_loss(
+                    labels_fake_faces, labels_zero_one) + self.classification_loss(labels_real_faces, labels_zero_one)
+                d_decision_loss = self.loss(d_real_faces, discriminator_target_real) + \
+                    self.loss(d_fake_faces, discriminator_target_fake)
 
-                combined_discriminator_loss = d_classification_loss + discriminator_loss
-                combined_discriminator_loss.backward()
+                discriminator_loss = (d_classification_loss + discriminator_loss) / 2
+                discriminator_loss.backward()
                 self.optimizer_discriminator.step()
 
                 ############################
                 # (2) Update G network: maximize log(D(G(z)))
                 ###########################
-                self.generator.zero_grad()
+                self.optimizer_generator.zero_grad()
 
                 z_noise.data.normal_(0, 1)
                 fake_faces = self.generator(z_noise, labels, config=config)
                 d_fake_faces, labels_fake_faces = self.discriminator(fake_faces, config=config)
 
                 g_classification_loss = self.classification_loss(labels_fake_faces, labels_zero_one)
-                generator_loss = self.loss(d_fake_faces, generator_target)
-                combined_generator_loss = generator_loss + g_classification_loss
-                combined_generator_loss.backward()
+                g_decision_loss = self.loss(d_fake_faces, generator_target)
+                generator_loss = g_decision_loss + g_classification_loss
+                generator_loss.backward()
                 self.optimizer_generator.step()
 
-                self.loss_history.append((discriminator_loss.item(), d_classification_loss.item(),
-                                          generator_loss.item(), g_classification_loss.item()))
-                self.batch_training_info_and_samples(epoch, i, combined_generator_loss, combined_discriminator_loss, config,
+                self.loss_history.append((d_decision_loss.item(), d_classification_loss.item(), discriminator_loss.item(),
+                                          g_decision_loss.item(), g_classification_loss.item(), generator_loss.item()))
+                self.batch_training_info_and_samples(epoch, i, generator_loss, discriminator_loss, config,
                                                      fake_faces, fixed_noise, fixed_attr)
             self.epoch_training_info_and_samples(
-                epoch, combined_generator_loss, combined_generator_loss, config, fake_faces, fixed_noise, fixed_attr)
+                epoch, generator_loss, discriminator_loss, config, fake_faces, fixed_noise, fixed_attr)
             ######### epoch finished ##########
 
     def batch_training_info_and_samples(self, epoch, batch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_labels):
