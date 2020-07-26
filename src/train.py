@@ -149,9 +149,6 @@ class Trainer:
         fixed_attr[fixed_attr == 0] = -1
 
         z_noise = Variable(FloatTensor(config.batch_size, config.nz, 1, 1)).to(device)
-        generator_target = Variable(FloatTensor(config.batch_size, 1).fill_(1)).to(device)
-        discriminator_target_real = Variable(FloatTensor(config.batch_size, 1).fill_(1)).to(device)
-        discriminator_target_fake = Variable(FloatTensor(config.batch_size, 1).fill_(0)).to(device)
         for epoch in range(config.epochs):
             for i, (data, labels) in tqdm(enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch+1}"):
                 labels = Variable(labels).to(device)
@@ -164,15 +161,6 @@ class Trainer:
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
                 self.optimizer_discriminator.zero_grad()
-
-                if config.label_smoothing:
-                    discriminator_target_real.data.uniform_(0.9, 1.0)  # one-sided label smoothing
-                if config.label_flipping:
-                    discriminator_target_real.data = self.randomly_flip_labels(
-                        discriminator_target_real.data, p=0.05)  # label flipping
-                    discriminator_target_fake.data = self.randomly_flip_labels(
-                        discriminator_target_fake.data, p=0.05)  # label flipping
-
                 z_noise.data.normal_(0, 1)
                 decision_real_faces, labels_real_faces = self.discriminator(real_faces, config=config)
 
