@@ -96,7 +96,7 @@ class Discriminator(nn.Module):
         #                                config.target_image_size * config.target_image_size)
         self.decision_layer = Conv2dBlock(in_channels=config.discriminator_filters * 8,
                                           out_channels=1, kernel_size=4, stride=1, padding=0,
-                                          batch_norm=False, activation_function=nn.Sigmoid()
+                                          batch_norm=False, activation_function=lambda x: x
                                           )
 
         self.classification_layer = Conv2dBlock(in_channels=config.discriminator_filters * 8,
