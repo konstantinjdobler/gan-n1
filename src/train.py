@@ -113,7 +113,7 @@ class Trainer:
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
 
-                self.discriminator.zero_grad()
+                self.optimizer_discriminator.zero_grad()
 
                 if config.label_smoothing:
                     discriminator_target_real.data.uniform_(0.7, 1.0)  # one-sided label smoothing trick
@@ -141,7 +141,7 @@ class Trainer:
                 # (2) Update G network: maximize log(D(G(z)))
                 ###########################
 
-                self.generator.zero_grad()
+                self.optimizer_generator.zero_grad()
 
                 # TODO: test if we want to train the generator with new fake faces or instead use the ones we already used wiht the discriminator
                 # noise.data.normal_(0, 1)
