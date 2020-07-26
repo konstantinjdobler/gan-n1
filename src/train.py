@@ -141,7 +141,7 @@ class Trainer:
                 d_decision_loss = self.loss(d_real_faces, discriminator_target_real) + \
                     self.loss(d_fake_faces, discriminator_target_fake)
 
-                discriminator_loss = (d_classification_loss + discriminator_loss) / 2
+                discriminator_loss = (d_classification_loss + d_decision_loss) / 2
                 discriminator_loss.backward()
                 self.optimizer_discriminator.step()
 
