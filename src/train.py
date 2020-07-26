@@ -207,8 +207,8 @@ class Trainer:
                 generator_loss.backward()
                 self.optimizer_generator.step()
 
-                self.loss_history.append((d_decision_loss.item(), d_classification_loss.item(),
-                                          g_decision_loss.item(), g_classification_loss.item()))
+                self.loss_history.append((d_decision_loss.item(), d_classification_loss.item(), discriminator_loss.item(),
+                                          g_decision_loss.item(), g_classification_loss.item(), generator_loss.item()))
                 self.batch_training_info_and_samples(epoch, i, generator_loss, discriminator_loss, config,
                                                      fake_faces, fixed_noise, fixed_attr)
             self.epoch_training_info_and_samples(
@@ -246,7 +246,7 @@ class Trainer:
         plt.title(f"Losses in epoch {epoch}")
         plt.ylabel('Loss')
         plt.xlabel('Iterations')
-        plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
+        # plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
         self.LOG = {
             "loss_discriminator": [],
             "loss_generator": []
