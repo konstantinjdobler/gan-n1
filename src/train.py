@@ -199,7 +199,7 @@ class Trainer:
         plt.title(f"Losses in epoch {epoch}")
         plt.ylabel('Loss')
         plt.xlabel('Iterations')
-        plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
+        # plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
         self.LOG = {
             "loss_discriminator": [],
             "loss_generator": []
