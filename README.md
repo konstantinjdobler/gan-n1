@@ -62,6 +62,7 @@ Call **train.py** to initiate a training
 python train.py --dataset-dir path/to/dataset --condition-file /path/to/condition/file.txt
 ```
 The path to the dataset is the folder in which either the folder with all images or the folders containing different prescaled datasets lie.
+
 Additional parameters:
 * *checkpoint*: Path to a checkpoint for resuming a previous training
 * *result-dir*: Path to the parent directory of the folder, where images, checkpoints and loss files are saved
