@@ -113,7 +113,7 @@ class Trainer:
                 self.optimizer_discriminator.zero_grad()
 
                 if config.label_smoothing:
-                    discriminator_target_real.data.uniform_(0.7, 1.0)  # one-sided label smoothing trick
+                    discriminator_target_real.data.uniform_(0.9, 1.0)  # one-sided label smoothing trick
                 if config.label_flipping:
                     discriminator_target_real.data = self.randomly_flip_labels(
                         discriminator_target_real.data, p=0.05)  # label flipping trick
