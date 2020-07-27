@@ -1,0 +1,5 @@
+- model.pt: your trained model file
+- data_loading.py: preprocessing, data iterators
+- architecture.py: model architecture class(es)
+- train.py: instantiates a model, conducts the training and saves the model
+- test.py: evaluation metric functions

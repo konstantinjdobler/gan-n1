@@ -3,7 +3,7 @@ data/
 venv/
 *.pyc
 checkpoints/
-fake_samples/
+src/fake_samples/
 src/output/
 __pycache__
 results/
