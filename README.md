@@ -1,23 +1,88 @@
 # gan-n1
 Deep Learning Course @ HPI SoSe 2020
 
+This repository contains two GAN architectures for generating novel images. We tested them on the CelebA dataset to generate faces.
+
+# Installation
+This project requires Python 3.8. Install all necessary libraries from the requirements.txt.
+
+# Content of this repository
+## DCGAN
+In src/DCGAN, you can find all necessary files for using the DCGAN architecture.
+
+### Training
+Call **train.py** to initiate a training
+```
+python train.py --dataset-dir path/to/dataset --condition-file /path/to/condition/file.txt
+```
+Additional parameters:
+* *result-dir*: Path to the parent directory of the folder, where images, checkpoints and loss files are saved
+* *checkpoint-prefix*: Name of the folder, where images, checkpoints and loss files are saved (the current datetime by default)
+* *generator-path*: Path to a pretrained generator to resume training
+* *discriminator-path*: Path to a pretrained discriminator to resume training
+* *no-checkpoints-save*: If activated, np checkpoints are saved during training
+* *no-random-sample*: If activated, no image samples are generated during training
+* *sample-interval*: How often during training, images samples should be generated and checkpoints should be saved
+* *fixed-noise-sample*: If activated, a fixed noise sample is used for generating images during training
+* *show-loss-plot*: If activated, a loss plot is shown during training
+* *seed*: The seed for the PRNG
+* *workers*: The number of workers used for data loading
+* *batch-size*: The batch size to use
+* *epochs*: The number of epochs to train
+* *no-label-smoothing*: Switches off label smoothing
+* *no-label-flipping*: Switches off label flipping
+* *target-image-size*: The size of the training images
 
 
-# Interesting repositories
-https://github.com/lucidrains/stylegan2-pytorch "the simplest implemenation of style-gan2 in pytorch"
-- https://www.youtube.com/watch?v=u8qPvzk0AfY video explaining the paper this is based on
-- https://arxiv.org/pdf/1912.04958.pdf paper this is based on
+### Image generation
+Call **generate.py** to generate novel images, using a trained net
+```
+python generate.py --generator-path path/to/generator --atributes path/to/attributes/file --result-path /result/image/path.png
+```
+Additional parameters:
+* *number-of-images*: The number of images that should be generated. All the images are saved as one image collage
+* *image-resolution*: The resolution of the generated images (must be equal to the resolution, the generator was trained on)
 
-https://github.com/rosinality/stylegan2-pytorch
+## PGAN
 
-https://github.com/HighCWu/Condition-StyleGAN-PyTorch
+In src/PGAN, you can find all necessary files for using the PGAN architecture.
 
-Progressive Wasserstein GAN with gradient penalty: https://github.com/shanexn/pytorch-pggan
+### Training
+It can speed up the training, if the images are resized, prior to training. You can use the helper/prepare_data.py for this.
+```
+python prepare_data.py /path/to/folder/in/which/the/dataset/folder/is/located
+```
 
-Official Pytorch implementation for progressive GAN (amongst others): https://github.com/facebookresearch/pytorch_GAN_zoo
+Call **train.py** to initiate a training
+```
+python train.py --dataset-dir path/to/dataset --condition-file /path/to/condition/file.txt
+```
+The path to the dataset is the folder in which either the folder with all images or the folders containing different prescaled datasets lie.
+Additional parameters:
+* *checkpoint*: Path to a checkpoint for resuming a previous training
+* *result-dir*: Path to the parent directory of the folder, where images, checkpoints and loss files are saved
+* *checkpoint-prefix*: Name of the folder, where images, checkpoints and loss files are saved (the current datetime by default)
+* *no-checkpoints-save*: If activated, no checkpoints are saved during training
+* *checkpoint-interval*: How often during training, checkpoints should be saved
+* *no-random-sample*: If activated, no image samples are generated during training
+* *sample-interval*: How often during training, images samples should be generated
+* *fixed-noise-sample*: If activated, a fixed noise sample is used for generating images during training
+* *training-info-interval*: How often during training, information about the current iteration, loss and alpha value should be printed
+* *workers*: The number of workers used for data loading
+* *seed*: The seed for the PRNG
 
-# Interesting links
-resource for improvement heuristics for GANs
- - https://github.com/soumith/ganhacks
- - https://machinelearningmastery.com/how-to-train-stable-generative-adversarial-networks/
-https://www.youtube.com/watch?v=dCKbRCUyop8 Video about StyleGAN concepts with impressive presentation style
+
+### Image generation
+Call **generate.py** to generate novel images, using a trained net
+```
+python generate.py --checkpoint-path path/to/generator/checkpoint --atributes path/to/attributes/file --result-path /result/image/path.png
+```
+Additional parameters:
+* *number-of-images*: The number of images that should be generated. All the images are saved as one image collage
+* *image-resolution*: Only influences the resolution with which the images are saved. The resolution of the generated images is defined by the used generator
+
+### Loss evaluation
+Call **helper/make_chart.py** to plot the losses that are written per resolution as txt file.
+```
+python make_chart.py /path/to/loss/file.txt --chart-title Losses4x4
+```
