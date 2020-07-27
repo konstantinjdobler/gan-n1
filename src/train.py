@@ -174,8 +174,8 @@ class Trainer:
                     WGANGP_loss(decision_fake_faces, should_be_real=False)
 
                 discriminator_loss = d_classification_loss + d_decision_loss
-                discriminator_loss += WGANGP_gradient_penalty(real_faces,
-                                                              fake_faces, self.discriminator, 10, backward=False)
+                # discriminator_loss += WGANGP_gradient_penalty(real_faces,
+                                                            #   fake_faces, self.discriminator, 10, backward=False)
                 discriminator_loss += Epsilon_loss(decision_real_faces, 0.001)
                 discriminator_loss.backward()
                 self.optimizer_discriminator.step()
