@@ -3,8 +3,8 @@ data/
 venv/
 *.pyc
 checkpoints/
-src/fake_samples/
-src/output/
+fake_samples/
+output/
 __pycache__
 results/
 .DS_Store
