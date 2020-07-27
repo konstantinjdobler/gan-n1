@@ -19,46 +19,37 @@ from data_loading import ImageFeatureFolder
 from datetime import datetime
 
 
-parser = argparse.ArgumentParser("The best N Group - N1")
+parser = argparse.ArgumentParser("For training a DCGAN")
 
 parser.add_argument('--dataset-dir',  type=str, default='../celeba')
+parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
 parser.add_argument('--result-dir', type=str, default='./fake_samples')
-parser.add_argument('--checkpoint-dir', type=str, default='./checkpoints')
 parser.add_argument('--checkpoint-prefix', type=str, default=datetime.now().strftime("%d-%m-%Y_%H_%M_%S"))
-parser.add_argument('-s', '--save-checkpoints', dest='save_checkpoints', action='store_true')
+
+parser.add_argument('--ncs', '--no-checkpoints-save', dest='save_checkpoints', action='store_false')
 parser.add_argument('--nrs', '--no-random-sample', dest='random_sample', action='store_false',
                     help='save random samples of fake faces during training')
-parser.add_argument('--ii', '--training-info-interval', dest='training_info_interval', type=int, default=800,
-                    help='controls how often during an epoch info is printed')
 parser.add_argument('--si', '--sample-interval', dest='sample_interval', type=int, default=1500,
-                    help='controls how often during an epoch sample images are saved ')
-parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
+                    help='controls how often during an epoch sample images are saved')
+parser.add_argument('--show-loss-plot', dest='show_loss_plot', action='store_true')
+
 parser.add_argument('--batch-size', type=int, default=32)
 parser.add_argument('--epochs', type=int, default=20)
 parser.add_argument('--workers', type=int, default=2)
-parser.add_argument('--nz', type=int, default=100)  # number of noise dimension
-parser.add_argument('--nc', type=int, default=3)  # number of result channel
-parser.add_argument('--nfeature', type=int, default=40)
-parser.add_argument('--lr', type=float, default=0.0002)
+
 parser.add_argument('--seed', dest='manual_seed', type=int, required=False)
 parser.add_argument('-g', '--generator-path', dest='generator_path', help='use pretrained generator')
 parser.add_argument('-d', '--discriminator-path', dest='discriminator_path', help='use pretrained discriminator')
 parser.add_argument('--no-label-smoothing', dest='label_smoothing', action='store_false')
 parser.add_argument('--no-label-flipping', dest='label_flipping', action='store_false')
 
-parser.add_argument('--print-loss', dest='print_loss', action='store_true')
-parser.add_argument('--show-loss-plot', dest='show_loss_plot', action='store_true')
-
 parser.add_argument('--fixed-noise-sample', dest='fixed_noise_sample', action='store_true',
                     help='show model progression by generating samples with the same fixed noise vector during training')
 parser.add_argument('--target-image-size', type=int, default=64)
-parser.add_argument('--gf', '--generator-filters', dest='generator_filters', type=int, default=64)
-parser.add_argument('--df', '--discriminator-filters', dest='discriminator_filters', type=int, default=64)
-parser.add_argument('--no-hd-crop', dest='hd_crop', action='store_false')
 
 
-parser.set_defaults(save_checkpoints=False, random_sample=True, label_flipping=True,
-                    label_smoothing=True, print_loss=False, show_loss_plot=False, fixed_noise_sample=False, hd_crop=True)
+parser.set_defaults(save_checkpoints=True, random_sample=True, label_flipping=True,
+                    label_smoothing=True, show_loss_plot=False, fixed_noise_sample=False)
 
 # beta1 is a hyperparameter, suggestion from hack repo is 0.5
 betas = (0.5, 0.99)  # adam optimizer beta1, beta2
@@ -66,22 +57,28 @@ betas = (0.5, 0.99)  # adam optimizer beta1, beta2
 
 class Trainer:
     def __init__(self):
-        self.generator = Generator(config).to(device)
-        self.discriminator = Discriminator(config).to(device)
-        # experiment with different loss functions, TODO: test out Wasserstein loss
+        self.config = config
+        self.config.nz = 100 # number of noise dimension
+        self.config.nc = 3 # number of result channel
+        self.config.lr = 0.0002
+        self.config.generator_filters = 64
+        self.config.discriminator_filters = 64
+        self.config.nfeature = 40 # Number of different attributes
+
+        self.generator = Generator(self.config).to(device)
+        self.discriminator = Discriminator(self.config).to(device)
+
         self.loss = nn.BCELoss().to(device)
-        self.optimizer_generator = optim.Adam(self.generator.parameters(), lr=config.lr, betas=betas)
-        self.optimizer_discriminator = optim.Adam(self.discriminator.parameters(), lr=config.lr, betas=betas)
+        self.optimizer_generator = optim.Adam(self.generator.parameters(), lr=self.config.lr, betas=betas)
+        self.optimizer_discriminator = optim.Adam(self.discriminator.parameters(), lr=self.config.lr, betas=betas)
 
         self.generator.apply(weights_init)
         if config.generator_path is not None:
             self.generator.load_state_dict(torch.load(config.generator_path))
-        # print("Generator: ", self.generator)
 
         self.discriminator.apply(weights_init)
         if config.discriminator_path is not None:
             self.discriminator.load_state_dict(torch.load(config.discriminator_path))
-        # print("Discriminator: ", self.discriminator)
 
         self.loss_history = []
         self.LOG = {
@@ -98,11 +95,11 @@ class Trainer:
 
     def train(self, dataloader):
         # for progress visualization
-        fixed_noise = torch.randn(config.batch_size, config.nz, 1, 1, device=device)
-        fixed_attr = (torch.FloatTensor(config.nfeature, config.batch_size).uniform_() > 0.7 ).float().to(device)
+        fixed_noise = torch.randn(config.batch_size, self.config.nz, 1, 1, device=device)
+        fixed_attr = (torch.FloatTensor(self.config.nfeature, config.batch_size).uniform_() > 0.7 ).float().to(device)
         fixed_attr[fixed_attr == 0] = -1
 
-        z_noise = Variable(FloatTensor(config.batch_size, config.nz, 1, 1)).to(device)
+        z_noise = Variable(FloatTensor(config.batch_size, self.config.nz, 1, 1)).to(device)
         generator_target = Variable(FloatTensor(config.batch_size, 1).fill_(1)).to(device)
         discriminator_target_real = Variable(FloatTensor(config.batch_size, 1).fill_(1)).to(device)
         discriminator_target_fake = Variable(FloatTensor(config.batch_size, 1).fill_(0)).to(device)
@@ -161,10 +158,6 @@ class Trainer:
         self.LOG["loss_generator"].append(g_loss)
         self.LOG["loss_descriminator"].append(d_loss)
 
-        if config.print_loss and batch > 0 and batch % config.training_info_interval == 0:
-            if config.print_loss:
-                tqdm.write(
-                    f"epoch {epoch+1} batch {batch} | generator loss: {g_loss} | discriminator loss: {d_loss}")
         if batch % config.sample_interval == 0:
             if config.random_sample:
                 vutils.save_image(
@@ -195,8 +188,6 @@ class Trainer:
             "loss_generator": []
         }
 
-        if config.print_loss:
-            tqdm.write(f"epoch {epoch+1} | generator loss: {g_loss} | discriminator loss: {d_loss}")
         if config.random_sample:
             vutils.save_image(
                 fake_faces.data[:min(config.batch_size, 32)], f'{config.result_dir}/{config.checkpoint_prefix}/result_epoch_{epoch + 1}.png', normalize=True)
@@ -230,21 +221,15 @@ if __name__ == '__main__':
     random.seed(config.manual_seed)
     torch.manual_seed(config.manual_seed)
 
-    # Boost performace by selecting optimal torch-internal algorithms for hardware config
-    # This adds a bit of overhaed at the beginning, but is faster at every other iteration
-    # Training data needs to be of constant shape for full effect
     cudnn.benchmark = True
 
     # Create dirs if not already there
-    if(config.random_sample or config.fixed_noise_sample):
+    if(config.random_sample or config.fixed_noise_sample or config.save_checkpoints):
         print(f"Sample fake images will be saved to {config.result_dir}/{config.checkpoint_prefix}")
         os.makedirs(f"{config.result_dir}/{config.checkpoint_prefix}", exist_ok=True)
-    if(config.save_checkpoints):
-        print(f"Checkpoints will be saved to {config.checkpoint_dir}/{config.checkpoint_prefix}")
-        os.makedirs(f"{config.checkpoint_dir}/{config.checkpoint_prefix}", exist_ok=True)
 
     print("Loading Data")
-    transformers = [] if config.hd_crop else [transforms.CenterCrop(178)]
+    transformers = []
     transformers.extend([transforms.ToTensor(),
                          transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     dataset = ImageFeatureFolder(config.dataset_dir, config.condition_file, transform=transforms.Compose(transformers))
