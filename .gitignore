@@ -5,3 +5,5 @@ venv/
 checkpoints/
 fake_samples/
 src/output/
+__pycache__
+results/

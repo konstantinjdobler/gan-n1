@@ -6,8 +6,8 @@ Bald,0
 Bangs,1
 Big_Lips,1
 Big_Nose,0
-Black_Hair,0
-Blond_Hair,1
+Black_Hair,1
+Blond_Hair,0
 Blurry,0
 Brown_Hair,0
 Bushy_Eyebrows,0

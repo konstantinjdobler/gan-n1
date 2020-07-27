@@ -143,9 +143,8 @@ class Trainer:
 
                 self.optimizer_generator.zero_grad()
 
-                # TODO: test if we want to train the generator with new fake faces or instead use the ones we already used wiht the discriminator
-                # noise.data.normal_(0, 1)
-                # fake_faces = self.generator(z_noise, attr, config)
+                z_noise.data.normal_(0, 1)
+                fake_faces = self.generator(z_noise, labels, config=config)
 
                 d_fake = self.discriminator(fake_faces, attr, config)
                 g_loss = self.loss(d_fake, generator_target)
@@ -182,7 +181,7 @@ class Trainer:
         plt.legend(loc="upper left")
         plt.ylabel('Loss')
         plt.xlabel('Iterations')
-        plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
+        #plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
 
         if config.show_loss_plot:
             plt.show()
