@@ -1,5 +1,6 @@
-# gan-n1
+# GANs for generating novel face images
 Deep Learning Course @ HPI SoSe 2020
+Group N1
 
 This repository contains two GAN architectures for generating novel images. We tested them on the CelebA dataset to generate faces.
 
@@ -48,7 +49,7 @@ Additional parameters:
 In src/PGAN, you can find all necessary files for using the PGAN architecture.
 
 ### Training
-It can speed up the training, if the images are resized, prior to training. You can use the helper/prepare_data.py for this.
+It can speed up the training, if the images are resized prior to training. You can use the helper/prepare_data.py for this.
 ```
 python prepare_data.py /path/to/folder/in/which/the/dataset/folder/is/located
 ```
