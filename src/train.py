@@ -144,7 +144,7 @@ class Trainer:
                 self.optimizer_generator.zero_grad()
 
                 z_noise.data.normal_(0, 1)
-                fake_faces = self.generator(z_noise, labels, config=config)
+                fake_faces = self.generator(z_noise, attr, config=config)
 
                 d_fake = self.discriminator(fake_faces, attr, config)
                 g_loss = self.loss(d_fake, generator_target)
