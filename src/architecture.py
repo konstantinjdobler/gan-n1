@@ -36,7 +36,7 @@ class Conv2dBlock(nn.Module):
                  stride: int = 2, padding: int = 1, bias=False,
                  downsampling_factor: int = None,  # must be divisible by 2
                  activation_function=nn.LeakyReLU(0.2, inplace=True),  # from GAN Hacks
-                 batch_norm: bool = True):
+                 batch_norm: bool = True, layer_norm: bool = False):
 
         super(Conv2dBlock, self).__init__()
         if downsampling_factor:
@@ -47,6 +47,7 @@ class Conv2dBlock(nn.Module):
 
         self.conv_layer = nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=bias)
         self.batch_norm = nn.BatchNorm2d(out_channels) if batch_norm else None
+
         self.activation = activation_function
 
     def forward(self, x):
@@ -106,17 +107,17 @@ class Discriminator(nn.Module):
 
             Conv2dBlock(in_channels=config.discriminator_filters,
                         out_channels=config.discriminator_filters * 2,
-                        downsampling_factor=2*adjustment_to_image_size),
+                        downsampling_factor=2*adjustment_to_image_size, batch_norm=False),
             nn.Dropout(0.5, inplace=False),
 
             Conv2dBlock(in_channels=config.discriminator_filters * 2,
                         out_channels=config.discriminator_filters * 4,
-                        downsampling_factor=2),
+                        downsampling_factor=2, batch_norm=False),
             nn.Dropout(0.5, inplace=False),
 
             Conv2dBlock(in_channels=config.discriminator_filters * 4,
                         out_channels=config.discriminator_filters * 8,
-                        downsampling_factor=2),
+                        downsampling_factor=2, batch_norm=False),
             nn.Dropout(0.5, inplace=False),
 
             Conv2dBlock(in_channels=config.discriminator_filters * 8,

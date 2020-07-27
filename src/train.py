@@ -1,5 +1,6 @@
 import os
 from time import sleep
+import math
 import argparse
 import torch
 import torch.optim as optim
@@ -65,7 +66,32 @@ parser.set_defaults(save_checkpoints=False, random_sample=True, label_flipping=T
 betas = (0.5, 0.99)  # adam optimizer beta1, beta2
 
 
-def WGANGP_gradient_penalty(input, fake, discriminator, weight, backward=True):
+def isinf(tensor):
+    if not isinstance(tensor, torch.Tensor):
+        raise ValueError("The argument is not a tensor", str(tensor))
+    return tensor.abs() == math.inf
+
+
+def isnan(tensor):
+    if not isinstance(tensor, torch.Tensor):
+        raise ValueError("The argument is not a tensor", str(tensor))
+    return tensor != tensor
+
+
+def finite_check(parameters):
+    if isinstance(parameters, torch.Tensor):
+        parameters = [parameters]
+    parameters = list(filter(lambda p: p.grad is not None, parameters))
+
+    for p in parameters:
+        infGrads = isinf(p.grad.data)
+        p.grad.data[infGrads] = 0
+
+        nanGrads = isnan(p.grad.data)
+        p.grad.data[nanGrads] = 0
+
+
+def WGANGP_gradient_penalty(input, fake, discriminator, weight, config, backward=True):
     batchSize = input.size(0)
     alpha = torch.rand(batchSize, 1)
     alpha = alpha.expand(batchSize, int(input.nelement() /
@@ -77,7 +103,7 @@ def WGANGP_gradient_penalty(input, fake, discriminator, weight, backward=True):
     interpolates = torch.autograd.Variable(
         interpolates, requires_grad=True)
 
-    decisionInterpolate, labels = discriminator(interpolates)
+    decisionInterpolate, labels = discriminator(interpolates, config)
     decisionInterpolate = decisionInterpolate[:, 0].sum()
 
     gradients = torch.autograd.grad(outputs=decisionInterpolate,
@@ -160,6 +186,7 @@ class Trainer:
                 ############################
                 # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
                 ###########################
+              
                 self.optimizer_discriminator.zero_grad()
                 z_noise.data.normal_(0, 1)
                 decision_real_faces, labels_real_faces = self.discriminator(real_faces, config=config)
@@ -174,10 +201,11 @@ class Trainer:
                     WGANGP_loss(decision_fake_faces, should_be_real=False)
 
                 discriminator_loss = d_classification_loss + d_decision_loss
-                # discriminator_loss += WGANGP_gradient_penalty(real_faces,
-                                                            #   fake_faces, self.discriminator, 10, backward=False)
+                WGANGP_gradient_penalty(real_faces, fake_faces,
+                                        self.discriminator, 10, config, backward=True)
                 discriminator_loss += Epsilon_loss(decision_real_faces, 0.001)
                 discriminator_loss.backward()
+                finite_check(self.discriminator.parameters())
                 self.optimizer_discriminator.step()
 
                 ############################
@@ -193,6 +221,7 @@ class Trainer:
                 g_decision_loss = WGANGP_loss(decision_fake_faces, should_be_real=True)
                 generator_loss = g_decision_loss + g_classification_loss
                 generator_loss.backward()
+                finite_check(self.generator.parameters())
                 self.optimizer_generator.step()
 
                 self.loss_history.append((d_decision_loss.item(), d_classification_loss.item(), discriminator_loss.item(),
@@ -206,7 +235,10 @@ class Trainer:
     def batch_training_info_and_samples(self, epoch, batch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_labels):
         self.LOG["loss_generator"].append(g_loss)
         self.LOG["loss_discriminator"].append(d_loss)
-
+        with open(f'{config.result_dir}/{config.checkpoint_prefix}/losses.txt', "a") as loss_file:
+            loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n')
+                                  for loss_entry in self.loss_history))
+        self.loss_history = []
         if config.print_loss and batch > 0 and batch % config.training_info_interval == 0:
             if config.print_loss:
                 tqdm.write(
