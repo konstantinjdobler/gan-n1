@@ -10,7 +10,7 @@ class ConvTranspose2dBlock(nn.Module):
                  stride: int = 2, padding: int = 1, bias=False,
                  upsampling_factor: int = None,  # must be divisible by 2
                  activation_function=nn.ReLU(True),
-                 batch_norm: bool = True):
+                 batch_norm: bool = False):
 
         super(ConvTranspose2dBlock, self).__init__()
         if upsampling_factor:
@@ -36,7 +36,7 @@ class Conv2dBlock(nn.Module):
                  stride: int = 2, padding: int = 1, bias=False,
                  downsampling_factor: int = None,  # must be divisible by 2
                  activation_function=nn.LeakyReLU(0.2, inplace=True),  # from GAN Hacks
-                 batch_norm: bool = True, layer_norm: bool = False):
+                 batch_norm: bool = False, layer_norm: bool = False):
 
         super(Conv2dBlock, self).__init__()
         if downsampling_factor:
