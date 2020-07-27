@@ -225,7 +225,7 @@ if __name__ == '__main__':
 
     # Create dirs if not already there
     if(config.random_sample or config.fixed_noise_sample or config.save_checkpoints):
-        print(f"Sample fake images will be saved to {config.result_dir}/{config.checkpoint_prefix}")
+        print(f"Results will be saved to {config.result_dir}/{config.checkpoint_prefix}")
         os.makedirs(f"{config.result_dir}/{config.checkpoint_prefix}", exist_ok=True)
 
     print("Loading Data")
