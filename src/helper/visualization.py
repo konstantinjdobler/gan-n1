@@ -16,7 +16,7 @@ def save_tensor_as_image(data, out_size_image, path):
     imageio.imwrite(path, outdata)
 
 
-def make_numpy_grid(arrays_list, gridMaxWidth=2048,
+def make_numpy_grid(arrays_list, gridMaxWidth=1024,
                     imgMinSize=128,
                     interpolation='nearest'):
 

@@ -369,7 +369,7 @@ class Trainer:
 
     def generate_image(self, scale, iteration, labels):
         image = self.model.generate_image(self.model_config['mini_batch_size'][scale], labels, self.config.fixed_noise_sample)
-        save_tensor_as_image(image.data[:self.model_config['mini_batch_size'][scale]], 128, f'{self.config.result_dir}/{self.config.checkpoint_prefix}/scale' + str(scale) + '_iter' + str(iteration) + '.jpg')
+        save_tensor_as_image(image.data[:self.model_config['mini_batch_size'][scale]], max([128, 2**(scale+2)]), f'{self.config.result_dir}/{self.config.checkpoint_prefix}/scale' + str(scale) + '_iter' + str(iteration) + '.jpg')
 
     def write_loss_to_file(self, scale):
         with open(f'{self.config.result_dir}/{self.config.checkpoint_prefix}/losses' + str(scale) + '.txt', "a") as loss_file:
