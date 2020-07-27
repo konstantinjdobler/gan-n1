@@ -58,12 +58,12 @@ betas = (0.5, 0.99)  # adam optimizer beta1, beta2
 class Trainer:
     def __init__(self):
         self.config = config
-        self.config.nz = 100 # number of noise dimension
-        self.config.nc = 3 # number of result channel
+        self.config.nz = 100  # number of noise dimension
+        self.config.nc = 3  # number of result channel
         self.config.lr = 0.0002
         self.config.generator_filters = 64
         self.config.discriminator_filters = 64
-        self.config.nfeature = 40 # Number of different attributes
+        self.config.nfeature = 40  # Number of different attributes
 
         self.generator = Generator(self.config).to(device)
         self.discriminator = Discriminator(self.config).to(device)
@@ -96,7 +96,7 @@ class Trainer:
     def train(self, dataloader):
         # for progress visualization
         fixed_noise = torch.randn(config.batch_size, self.config.nz, 1, 1, device=device)
-        fixed_attr = (torch.FloatTensor(self.config.nfeature, config.batch_size).uniform_() > 0.7 ).float().to(device)
+        fixed_attr = (torch.FloatTensor(self.config.nfeature, config.batch_size).uniform_() > 0.7).float().to(device)
         fixed_attr[fixed_attr == 0] = -1
 
         z_noise = Variable(FloatTensor(config.batch_size, self.config.nz, 1, 1)).to(device)
@@ -171,14 +171,15 @@ class Trainer:
     def epoch_training_info_and_samples(self, epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr):
         for key, values in self.LOG.items():
             plt.plot(values, label=key)
-        plt.legend(loc="upper left")
+        plt.legend(loc="best")
         plt.ylabel('Loss')
         plt.xlabel('Iterations')
-        #plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
+        plt.title(f"Losses in Epoch {epoch+1}")
+        # plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
 
         if config.show_loss_plot:
             plt.show()
-        
+
         with open(f'{config.result_dir}/{config.checkpoint_prefix}/losses.txt', "a") as loss_file:
             loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n')
                                   for loss_entry in self.loss_history))
