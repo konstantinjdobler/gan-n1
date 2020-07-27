@@ -3,6 +3,9 @@ Deep Learning Course @ HPI SoSe 2020
 Group N1
 
 This repository contains two GAN architectures for generating novel images. We tested them on the CelebA dataset to generate faces.
+We got inspiration and also used code fragments from:
+* https://github.com/shanexn/pytorch-pggan
+* https://github.com/facebookresearch/pytorch_GAN_zoo
 
 # Installation
 This project requires Python 3.8. Install all necessary libraries from the requirements.txt.
