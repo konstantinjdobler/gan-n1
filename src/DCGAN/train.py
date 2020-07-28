@@ -74,11 +74,11 @@ class Trainer:
 
         self.generator.apply(weights_init)
         if config.generator_path is not None:
-            self.generator.load_state_dict(torch.load(config.generator_path))
+            self.generator.load_state_dict(torch.load(config.generator_path, map_location=device))
 
         self.discriminator.apply(weights_init)
         if config.discriminator_path is not None:
-            self.discriminator.load_state_dict(torch.load(config.discriminator_path))
+            self.discriminator.load_state_dict(torch.load(config.discriminator_path, map_location=device))
 
         #print(self.generator, self.discriminator)
         self.loss_history = []
