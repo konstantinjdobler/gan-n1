@@ -66,7 +66,7 @@ class Generator(nn.Module):
         middle_scaling_layers = [ConvTranspose2dBlock(in_channels=config.generator_filters * 2**(i+1),
                                                       out_channels=config.generator_filters * 2**i,
                                                       upsampling_factor=2) for i in reversed(range(num_middle_scaling_layers))]
-        self.main = nn.Sequential(
+        self.convolution_layers = nn.Sequential(
             ConvTranspose2dBlock(in_channels=config.nz + config.nfeature,
                                  out_channels=config.generator_filters * (2**num_middle_scaling_layers),
                                  kernel_size=4, stride=1, padding=0),
@@ -79,7 +79,7 @@ class Generator(nn.Module):
     def forward(self, x, attr, config):
         attr = attr.view(-1, config.nfeature, 1, 1)
         x = torch.cat([x, attr], 1)
-        return self.main(x)
+        return self.convolution_layers(x)
 
 
 class Discriminator(nn.Module):
