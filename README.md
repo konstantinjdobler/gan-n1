@@ -6,11 +6,15 @@ This repository contains two GAN architectures for generating novel images. We t
 We got inspiration and also used code fragments from:
 * https://github.com/shanexn/pytorch-pggan
 * https://github.com/facebookresearch/pytorch_GAN_zoo
+* https://github.com/caffeinism/cDC-GAN-pytorch
+* https://github.com/eriklindernoren/PyTorch-GAN
+
 
 # Installation
 This project requires Python 3.8. Install all necessary libraries from the requirements.txt.
 
 # Content of this repository
+As the architectures of our two models are very different, we decided to separate their source code into different subfolders in order to keep the code from growing too complex.
 ## DCGAN
 In src/DCGAN, you can find all necessary files for using the DCGAN architecture.
 
@@ -47,12 +51,14 @@ Additional parameters:
 * *number-of-images*: The number of images that should be generated. All the images are saved as one image collage
 * *image-resolution*: The resolution of the generated images (must be equal to the resolution, the generator was trained on)
 
+You can either use one of the prefilled attribute files in src/attribute_files or customize your own attribute_file. 
+
 ## PGAN
 
 In src/PGAN, you can find all necessary files for using the PGAN architecture.
 
 ### Training
-It can speed up the training, if the images are resized prior to training. You can use the helper/prepare_data.py for this.
+It can speed up the training if the images are resized prior to training. You can use the helper/prepare_data.py for this.
 ```
 python prepare_data.py /path/to/folder/in/which/the/dataset/folder/is/located
 ```

@@ -2,7 +2,7 @@ import torchvision.datasets as dset
 import torch.utils.data as data
 import torch
 
-
+# from https://github.com/caffeinism/cDC-GAN-pytorch
 class ImageFeatureFolder(dset.ImageFolder):
     def __init__(self, image_root, attribute_file, transform):
         super(ImageFeatureFolder, self).__init__(

@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser("For training a DCGAN")
 
 parser.add_argument('--dataset-dir',  type=str, default='../celeba')
 parser.add_argument('--condition-file', type=str, default='./src/list_attr_celeba.txt')
-parser.add_argument('--result-dir', type=str, default='./fake_samples')
+parser.add_argument('--result-dir', type=str, default='./results')
 parser.add_argument('--checkpoint-prefix', type=str, default=datetime.now().strftime("%d-%m-%Y_%H_%M_%S"))
 
 parser.add_argument('--ncs', '--no-checkpoints-save', dest='save_checkpoints', action='store_false')

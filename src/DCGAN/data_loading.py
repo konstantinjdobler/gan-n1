@@ -3,6 +3,8 @@ import torchvision.datasets as dset
 import torch.utils.data as data
 import torch
 
+# from https://github.com/caffeinism/cDC-GAN-pytorch
+
 
 class ImageFeatureFolder(dset.ImageFolder):
     def __init__(self, image_root, landmark_file, transform):
