@@ -22,7 +22,7 @@ from datetime import datetime
 parser = argparse.ArgumentParser("For training a DCGAN")
 
 parser.add_argument('--dataset-dir',  type=str, default='../celeba')
-parser.add_argument('--condition-file', type=str, default='./list_attr_celeba.txt')
+parser.add_argument('--condition-file', type=str, default='./src/list_attr_celeba.txt')
 parser.add_argument('--result-dir', type=str, default='./fake_samples')
 parser.add_argument('--checkpoint-prefix', type=str, default=datetime.now().strftime("%d-%m-%Y_%H_%M_%S"))
 
@@ -80,6 +80,7 @@ class Trainer:
         if config.discriminator_path is not None:
             self.discriminator.load_state_dict(torch.load(config.discriminator_path))
 
+        print(self.generator, self.discriminator)
         self.loss_history = []
         self.LOG = {
             "loss_descriminator": [],
@@ -148,7 +149,7 @@ class Trainer:
                 g_loss.backward()
                 self.optimizer_generator.step()
 
-                self.loss_history.append((g_loss, d_loss))
+                self.loss_history.append((g_loss.item(), d_loss.item()))
                 self.batch_training_info_and_samples(epoch, i, g_loss, d_loss, config,
                                                      fake_faces, fixed_noise, fixed_attr)
             self.epoch_training_info_and_samples(epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr)

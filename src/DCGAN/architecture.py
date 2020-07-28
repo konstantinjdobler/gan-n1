@@ -59,32 +59,21 @@ class Conv2dBlock(nn.Module):
 class Generator(nn.Module):
     def __init__(self, config):
         super(Generator, self).__init__()
-        # middle_scaling_layers = log(config.target_image_size, 2) - 3 # end layer has umsampling=2, first layer outputs 4x4
-        adjustment_to_image_size = config.target_image_size // 64  # 64 is standard output
+        # end layer has upsampling=2, first layer outputs 4x4
+        num_middle_scaling_layers = int(log(config.target_image_size, 2) - 3)
+
+        # as many scaling layers as necessary to scale to the target image size
+        middle_scaling_layers = [ConvTranspose2dBlock(in_channels=config.generator_filters * 2**(i+1),
+                                                      out_channels=config.generator_filters * 2**i,
+                                                      upsampling_factor=2) for i in reversed(range(num_middle_scaling_layers))]
         self.main = nn.Sequential(
-            # input: (config.nz + config.nfeature)
             ConvTranspose2dBlock(in_channels=config.nz + config.nfeature,
-                                 out_channels=config.generator_filters * 8,
+                                 out_channels=config.generator_filters * (2**num_middle_scaling_layers),
                                  kernel_size=4, stride=1, padding=0),
-            # state: (generator_filters*8) x 4 x 4
-
-            ConvTranspose2dBlock(in_channels=config.generator_filters * 8,
-                                 out_channels=config.generator_filters * 4, upsampling_factor=2),
-            # state: (generator_filters*4) x 8 x 8
-
-            ConvTranspose2dBlock(in_channels=config.generator_filters * 4,
-                                 out_channels=config.generator_filters * 2, upsampling_factor=2),
-            # state: (generator_filters*2) x 16 x 16 (using image size 64)
-
-            ConvTranspose2dBlock(in_channels=config.generator_filters * 2,
-                                 out_channels=config.generator_filters,
-                                 upsampling_factor=2 * adjustment_to_image_size),
-            # state: (generator_filters) x 32 x 32
-
+            *middle_scaling_layers,
             ConvTranspose2dBlock(in_channels=config.generator_filters,
                                  out_channels=config.nc, upsampling_factor=2,
                                  activation_function=nn.Tanh(), batch_norm=False),
-            # output: (nc) x 64 x 64
         )
 
     def forward(self, x, attr, config):
@@ -99,32 +88,19 @@ class Discriminator(nn.Module):
         self.feature_input = nn.Linear(config.nfeature,
                                        config.target_image_size * config.target_image_size)
 
-        adjustment_to_image_size = config.target_image_size // 64  # 64 is standard input
+        # end layer has upsampling=2, first layer outputs 4x4
+        num_middle_scaling_layers = int(log(config.target_image_size, 2) - 3)
+        # as many scaling layers as necessary to scale to the target image size
+        middle_scaling_layers = [Conv2dBlock(in_channels=config.generator_filters * 2**i,
+                                             out_channels=config.generator_filters * 2**(i + 1),
+                                             downsampling_factor=2) for i in range(num_middle_scaling_layers)]
         self.main = nn.Sequential(
-            # input: (nc) x 64 x 64 (using image size 64)
             Conv2dBlock(in_channels=config.nc + 1, out_channels=config.discriminator_filters,
                         downsampling_factor=2, batch_norm=False),
-            # state: (discriminator_filters) x 32 x 32
-
-            Conv2dBlock(in_channels=config.discriminator_filters,
-                        out_channels=config.discriminator_filters * 2,
-                        downsampling_factor=2*adjustment_to_image_size),
-            # state: (discriminator_filters*2) x 16 x 16
-
-            Conv2dBlock(in_channels=config.discriminator_filters * 2,
-                        out_channels=config.discriminator_filters * 4,
-                        downsampling_factor=2),
-            # state: (discriminator_filters*4) x 8 x 8
-
-            Conv2dBlock(in_channels=config.discriminator_filters * 4,
-                        out_channels=config.discriminator_filters * 8,
-                        downsampling_factor=2),
-            # state: (discriminator_filters*8) x 4 x 4
-
-            Conv2dBlock(in_channels=config.discriminator_filters * 8,
+            *middle_scaling_layers,
+            Conv2dBlock(in_channels=config.discriminator_filters * 2**num_middle_scaling_layers,
                         out_channels=1, kernel_size=4, stride=1, padding=0,
                         batch_norm=False, activation_function=nn.Sigmoid()),
-            # output: 1 x 1 x 1
         )
 
     def forward(self, x, attr, config):
