@@ -46,6 +46,8 @@ if __name__ == '__main__':
     generator.load_state_dict(states['generator_state'])
     generator.to(device)
 
+    generator.eval()
+
     labels = attributes.view(40).repeat(args.number_of_images, 1)
     noise = torch.randn(args.number_of_images, states['config']['dim_latent_vector']).to(device)
     faces = generator(noise, labels).detach().cpu()
