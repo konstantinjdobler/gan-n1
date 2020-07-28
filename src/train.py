@@ -70,7 +70,7 @@ class Trainer:
         self.generator = Generator(config).to(device)
         self.discriminator = Discriminator(config).to(device)
         # experiment with different loss functions, TODO: test out Wasserstein loss
-        self.loss = nn.BCELoss().to(device)
+        self.loss = nn.BCEWithLogitsLoss().to(device)
         self.classification_loss = nn.BCEWithLogitsLoss().to(device)
         self.optimizer_generator = optim.Adam(self.generator.parameters(), lr=config.lr, betas=betas)
         self.optimizer_discriminator = optim.Adam(self.discriminator.parameters(), lr=config.lr, betas=betas)
