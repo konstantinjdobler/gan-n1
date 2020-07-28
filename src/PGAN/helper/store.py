@@ -7,4 +7,9 @@ class Store:
 
     @staticmethod
     def load(path):
-        return torch.load(path)
+        cpu_only = not torch.cuda.is_available()
+        
+        if cpu_only:
+            return torch.load(path, map_location=torch.device('cpu'))
+        else:
+            return torch.load(path)
