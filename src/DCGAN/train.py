@@ -46,29 +46,29 @@ parser.add_argument('--no-label-flipping', dest='label_flipping', action='store_
 parser.add_argument('--fixed-noise-sample', dest='fixed_noise_sample', action='store_true',
                     help='show model progression by generating samples with the same fixed noise vector during training')
 parser.add_argument('--target-image-size', type=int, default=64)
+parser.add_argument('--nz', '--latent-vector-dimension', type=int, dest='nz', default=512)
 
 
 parser.set_defaults(save_checkpoints=True, random_sample=True, label_flipping=True,
                     label_smoothing=True, show_loss_plot=False, fixed_noise_sample=False)
 
-# beta1 is a hyperparameter, suggestion from hack repo is 0.5
-betas = (0.5, 0.99)  # adam optimizer beta1, beta2
-
 
 class Trainer:
     def __init__(self):
         self.config = config
-        self.config.nz = 100  # number of noise dimension
-        self.config.nc = 3  # number of result channel
+        self.config.nc = 3  # number of result channel; 3:= RGB
         self.config.lr = 0.0002
         self.config.generator_filters = 64
         self.config.discriminator_filters = 64
-        self.config.nfeature = 40  # Number of different attributes
+        self.config.nfeature = 40  # Number of different attributes, CelebA has 40
 
         self.generator = Generator(self.config).to(device)
         self.discriminator = Discriminator(self.config).to(device)
 
         self.loss = nn.BCELoss().to(device)
+
+        # beta1 is a hyperparameter, suggestion from Chantala et al. is 0.5
+        betas = (0.5, 0.99)
         self.optimizer_generator = optim.Adam(self.generator.parameters(), lr=self.config.lr, betas=betas)
         self.optimizer_discriminator = optim.Adam(self.discriminator.parameters(), lr=self.config.lr, betas=betas)
 
@@ -80,12 +80,8 @@ class Trainer:
         if config.discriminator_path is not None:
             self.discriminator.load_state_dict(torch.load(config.discriminator_path))
 
-        print(self.generator, self.discriminator)
+        #print(self.generator, self.discriminator)
         self.loss_history = []
-        self.LOG = {
-            "loss_descriminator": [],
-            "loss_generator": []
-        }
 
     def randomly_flip_labels(self, labels, p: float = 0.05):
         number_of_labels_to_flip = int(p * labels.shape[0])
@@ -108,7 +104,7 @@ class Trainer:
             for i, (data, attr) in tqdm(enumerate(dataloader), total=len(dataloader), desc=f"Epoch {epoch+1}"):
 
                 ############################
-                # (1) Update D network: maximize log(D(x)) + log(1 - D(G(z)))
+                #   TRAIN DISCRIMINATOR   #
                 ###########################
 
                 self.optimizer_discriminator.zero_grad()
@@ -136,7 +132,7 @@ class Trainer:
                 self.optimizer_discriminator.step()
 
                 ############################
-                # (2) Update G network: maximize log(D(G(z)))
+                #      TRAIN GENERATOR    #
                 ###########################
 
                 self.optimizer_generator.zero_grad()
@@ -150,15 +146,11 @@ class Trainer:
                 self.optimizer_generator.step()
 
                 self.loss_history.append((g_loss.item(), d_loss.item()))
-                self.batch_training_info_and_samples(epoch, i, g_loss, d_loss, config,
-                                                     fake_faces, fixed_noise, fixed_attr)
-            self.epoch_training_info_and_samples(epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr)
+                self.batch_training_info_and_samples(epoch, i, config, fake_faces, fixed_noise, fixed_attr)
+            self.epoch_training_info_and_samples(epoch, config, fake_faces, fixed_noise, fixed_attr)
             ######### epoch finished ##########
 
-    def batch_training_info_and_samples(self, epoch, batch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr):
-        self.LOG["loss_generator"].append(g_loss)
-        self.LOG["loss_descriminator"].append(d_loss)
-
+    def batch_training_info_and_samples(self, epoch, batch, config, fake_faces, fixed_noise, fixed_attr):
         if batch % config.sample_interval == 0:
             if config.random_sample:
                 vutils.save_image(
@@ -169,26 +161,26 @@ class Trainer:
                     vutils.save_image(fixed_fake.detach()[:min(config.batch_size, 32)],
                                       f'{config.result_dir}/{config.checkpoint_prefix}/fixed_noise_result_epoch_{epoch + 1}_batch_{batch}.png', normalize=True)
 
-    def epoch_training_info_and_samples(self, epoch, g_loss, d_loss, config, fake_faces, fixed_noise, fixed_attr):
-        for key, values in self.LOG.items():
-            plt.plot(values, label=key)
+    def epoch_training_info_and_samples(self, epoch, config, fake_faces, fixed_noise, fixed_attr):
+        generator_losses, discriminator_losses = zip(*self.loss_history)
+        plt.plot(discriminator_losses, label='discriminator')
+        plt.plot(generator_losses, label='generator')
+
         plt.legend(loc="best")
         plt.ylabel('Loss')
         plt.xlabel('Iterations')
         plt.title(f"Losses in Epoch {epoch+1}")
-        # plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
+        #plt.savefig(f"{config.result_dir}/{config.checkpoint_prefix}/loss_visualization_{epoch}.png")
 
         if config.show_loss_plot:
             plt.show()
+        else:
+            plt.close()
 
         with open(f'{config.result_dir}/{config.checkpoint_prefix}/losses.txt', "a") as loss_file:
             loss_file.writelines(((",".join(str(x) for x in loss_entry) + '\n')
                                   for loss_entry in self.loss_history))
         self.loss_history = []
-        self.LOG = {
-            "loss_descriminator": [],
-            "loss_generator": []
-        }
 
         if config.random_sample:
             vutils.save_image(
