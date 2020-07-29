@@ -1,10 +1,7 @@
-autopep8==1.5.3
-future==0.18.2
-numpy==1.19.0
-Pillow==7.2.0
-pycodestyle==2.6.0
-toml==0.10.1
-torch==1.5.1
-torchvision==0.6.1
-tqdm==4.47.0
-d2l==0.13.2 -f https://d2l.ai/whl.html
+numpy==1.19.1
+torch==1.6.0
+imageio==2.9.0
+matplotlib==3.3.0
+pillow==7.2.0
+torchvision==0.7.0
+tqdm==4.48.0
