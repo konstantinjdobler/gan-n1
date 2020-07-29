@@ -49,7 +49,7 @@ if __name__ == '__main__':
     generator.load_state_dict(torch.load(config.generator_path, map_location=device))
     generator.eval()
 
-    noise = Variable(FloatTensor(config.number_of_images, 100, 1, 1)).to(device)
+    noise = Variable(FloatTensor(config.number_of_images, config.nz, 1, 1)).to(device)
     noise.data.normal_(0, 1)
     faces = generator(noise, attributes.repeat(config.number_of_images, 1), config)
 
