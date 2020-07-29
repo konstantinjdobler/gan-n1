@@ -13,7 +13,7 @@ Pretrained models for both architectures can be found [HERE](https://drive.googl
 The demo.colab file is a python notebook for Google's Colab which contains automatic linkings to all necessary dependencies to serve as a playground for testing the pretrained models.
 
 # Installation
-This project requires Python 3.8. Install all necessary libraries from the requirements.txt.
+This project requires Python 3.8. The necessary libraries are listed in the requirements.txt. The easiest way is, to use this file for creating a conda environment, but you can also install the libraries manually.
 
 # Content of this repository
 As the architectures of our two models are very different, we decided to separate their source code into different subfolders in order to keep the code from growing too complex.
