@@ -19,7 +19,7 @@ parser.add_argument('-r', '--image-resolution', dest='image_resolution', type=in
 def loadAttributes(attributesPath):
     with open(attributesPath) as file:
         lines = [line.rstrip() for line in file]
-    attributes = torch.FloatTensor([list(map(float, line.split(',')[-1])) for line in lines])
+    attributes = torch.FloatTensor([float(line.split(',')[-1]) for line in lines])
     attributes[attributes == 0] = -1
     return attributes
 
