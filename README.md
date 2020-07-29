@@ -10,7 +10,7 @@ We got inspiration and also used code fragments from:
 * https://github.com/eriklindernoren/PyTorch-GAN
 
 Pretrained models for both architectures can be found [HERE](https://drive.google.com/drive/folders/1S0dfdo0s9yk9h8Q1sqvOqV3MDdAiGBPo?usp=sharing).
-The demo.colab file is a python notebook for Google's Colab which contains automatic linkings to all necessary dependencies to serve a playground for testing the pretrained models.
+The demo.colab file is a python notebook for Google's Colab which contains automatic linkings to all necessary dependencies to serve as a playground for testing the pretrained models.
 
 # Installation
 This project requires Python 3.8. Install all necessary libraries from the requirements.txt.
@@ -53,7 +53,7 @@ Additional parameters:
 * *number-of-images*: The number of images that should be generated. All the images are saved as one image collage
 * *image-resolution*: The resolution of the generated images (must be equal to the resolution, the generator was trained on)
 
-You can either use one of the prefilled attribute files in src/attribute_files or customize your own attribute_file. 
+You can either use one of the prefilled attribute files in src/attribute_files or create a custom attribute file. 
 
 ## PGAN
 
