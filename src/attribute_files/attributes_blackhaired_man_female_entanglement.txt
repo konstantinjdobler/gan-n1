@@ -16,7 +16,7 @@ Double_Chin,-1
 Eyeglasses,-1
 Goatee,-1
 Gray_Hair,-1
-Heavy_Makeup,-1
+Heavy_Makeup,1
 High_Cheekbones,1
 Male,1
 Mouth_Slightly_Open,1
@@ -32,9 +32,9 @@ Sideburns,-1
 Smiling,1
 Straight_Hair,1
 Wavy_Hair,-1
-Wearing_Earrings,-1
+Wearing_Earrings,1
 Wearing_Hat,-1
 Wearing_Lipstick,-1
-Wearing_Necklace,-1
+Wearing_Necklace,1
 Wearing_Necktie,-1
-Young,-1
+Young,1

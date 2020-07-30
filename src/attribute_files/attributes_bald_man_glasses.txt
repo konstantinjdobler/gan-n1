@@ -15,7 +15,7 @@ Chubby,-1
 Double_Chin,-1
 Eyeglasses,1
 Goatee,-1
-Gray_Hair,1
+Gray_Hair,-1
 Heavy_Makeup,-1
 High_Cheekbones,-1
 Male,1

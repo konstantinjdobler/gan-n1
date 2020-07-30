@@ -14,6 +14,7 @@ parser.add_argument('-g', '--generator-path', dest='generator_path', type=str, d
 parser.add_argument('-a', '--attributes', type=str, default='./src/attributes.txt')
 parser.add_argument('-n', '--number-of-images', dest='number_of_images', type=int, default=16)
 parser.add_argument('-r', '--image-resolution', dest='image_resolution', type=int, default=256)
+parser.add_argument('--nz', '--latent-vector-dimension', dest='nz', type=int, default=100)
 
 
 def loadAttributes(attributesPath):
@@ -39,20 +40,17 @@ if __name__ == '__main__':
     attributes = loadAttributes(config.attributes).to(device)
 
     config.target_image_size = config.image_resolution
-    config.nz = 100
     config.nc = 3
     config.nfeature = 40
     config.generator_filters = 64
     config.discriminator_filters = 64
 
     generator = Generator(config).to(device)
-    generator.load_state_dict(torch.load(config.generator_path, map_location = device))
+    generator.load_state_dict(torch.load(config.generator_path, map_location=device))
     generator.eval()
 
-    noise = Variable(FloatTensor(config.number_of_images, 100, 1, 1)).to(device)
+    noise = Variable(FloatTensor(config.number_of_images, config.nz, 1, 1)).to(device)
     noise.data.normal_(0, 1)
-    faces = generator(noise, attributes.repeat(config.number_of_images,1), config)
+    faces = generator(noise, attributes.repeat(config.number_of_images, 1), config)
 
     vutils.save_image(faces.data[:config.number_of_images], f'{config.result_path}', normalize=True)
-
-
