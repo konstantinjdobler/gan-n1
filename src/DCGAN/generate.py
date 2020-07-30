@@ -31,11 +31,9 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
         FloatTensor = torch.cuda.FloatTensor
-        print("Running on the GPU")
     else:
         FloatTensor = torch.FloatTensor
         device = torch.device("cpu")
-        print("Running on the CPU")
 
     attributes = loadAttributes(config.attributes).to(device)
 
