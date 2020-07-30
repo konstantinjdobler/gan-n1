@@ -9,8 +9,8 @@ We got inspiration and also used code fragments from:
 * https://github.com/caffeinism/cDC-GAN-pytorch
 * https://github.com/eriklindernoren/PyTorch-GAN
 
-Pretrained models for both architectures can be found [HERE](https://drive.google.com/drive/folders/1S0dfdo0s9yk9h8Q1sqvOqV3MDdAiGBPo?usp=sharing).
-The demo.colab file is a python notebook for Google's Colab which contains automatic linkings to all necessary dependencies to serve as a playground for testing the pretrained models.
+Due to the size of our _models_ we provide pretrained ones for both architectures at a Google [Drive](https://drive.google.com/drive/folders/1S0dfdo0s9yk9h8Q1sqvOqV3MDdAiGBPo?usp=sharing).
+The _demo_colab.ipynb_ file is a python notebook for Google's Colab which contains automatic linkings to all necessary dependencies to serve as a playground for testing the pretrained models.
 
 # Installation
 This project requires Python 3.8. Install all necessary libraries from the requirements.txt.
