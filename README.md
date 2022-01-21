@@ -1,6 +1,5 @@
 # GANs for generating novel face images
-Deep Learning Course @ HPI ST 2020
-Group N1
+GAN research project for conditional generation of faces based on the CelebA dataset
 
 This repository contains two GAN architectures for generating novel images. We tested them on the CelebA dataset to generate faces.
 We got inspiration and also used code fragments from:
